@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": {"item": "minecraft:stick"},
+    "B": {"tag": "minecraft:wool"},
+    "C": {"item": "nujo:imaginational_core"}
+  },
+  "pattern":[
+    "B  ",
+    " C ",
+    "  A"
+  ],
+  "result": {
+    "item": "nujo:magic_paintbrush",
+    "count": 1
+  }
+}

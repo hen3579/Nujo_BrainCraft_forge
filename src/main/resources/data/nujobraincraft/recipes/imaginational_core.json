@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "A": {"item": "minecraft:azure_bluet"},
+    "B": {"item": "minecraft:ink_sac"},
+    "C": {"item": "minecraft:dandelion"},
+    "D": {"item": "minecraft:lapis_lazuli"},
+    "E": {"item": "minecraft:glowstone_dust"}
+  },
+  "pattern": [
+    " A ",
+    "CED",
+    " B "
+  ],
+
+  "result": {
+    "item": "nujo:imaginational_core",
+    "count": 1
+  }
+}
