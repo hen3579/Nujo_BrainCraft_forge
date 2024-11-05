@@ -1,9 +1,12 @@
 package com.Hen3579.Nujomod;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -31,6 +34,8 @@ public class NujoBraincraft
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
 
+        MinecraftForge.EVENT_BUS.addListener(PlayerLoggedInHandler::onLoggedIn);
+
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
 
@@ -46,6 +51,14 @@ public class NujoBraincraft
     // Add the example block item to the building blocks tab
     private void addCreative(BuildCreativeModeTabContentsEvent event)
     {}
+
+    public static class PlayerLoggedInHandler {
+        public static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
+            // 检查到玩家登录后，向玩家发送一条欢迎提醒
+            var player = event.getEntity();
+            player.sendSystemMessage(Component.translatable("message.nujobraincraft.welcome").append(Component.translatable("message.nujobraincraft.modname").withStyle(ChatFormatting.YELLOW)));
+        }
+    }
 
     // You can use SubscribeEvent and let the Event Bus discover methods to call
     @SubscribeEvent
