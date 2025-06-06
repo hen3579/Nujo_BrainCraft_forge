@@ -1,8 +1,11 @@
 package com.Hen3579.Nujomod;
 
+import com.Hen3579.Nujomod.Client.Events.ClientEventHandler;
+import com.Hen3579.Nujomod.Inits.*;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
@@ -30,14 +33,27 @@ public class NujoBraincraft
 
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
+        // 注册声音事件
+
 
         // Register ourselves for server and other game events we are interested in
         MinecraftForge.EVENT_BUS.register(this);
+        MinecraftForge.EVENT_BUS.register(ClientEventHandler.class);
+        // 注册音乐处理器
+        InitSounds.SOUND_EVENTS.register(FMLJavaModLoadingContext.get().getModEventBus());
+        //MinecraftForge.EVENT_BUS.register(MusicHandler.class);
+        InitEntity.ENTITIES.register(modEventBus); // 新增实体注册
 
         MinecraftForge.EVENT_BUS.addListener(PlayerLoggedInHandler::onLoggedIn);
 
         // Register the item to a creative tab
         modEventBus.addListener(this::addCreative);
+
+
+
+        InitItems.ITEMS.register(modEventBus);
+        InitBlocks.BLOCKS.register(modEventBus);
+        CreativeTabReg.TABS.register(modEventBus);
 
     }
 
@@ -50,7 +66,16 @@ public class NujoBraincraft
 
     // Add the example block item to the building blocks tab
     private void addCreative(BuildCreativeModeTabContentsEvent event)
-    {}
+    {
+        if(event.getTabKey() == CreativeModeTabs.INGREDIENTS) {
+            event.accept(InitItems.IMAGINATIONAL_CORE);
+            // event.accept(InitBlocks.BLANK_ZONE_BLOCK);
+        } else if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(InitItems.MAGIC_PAINTBRUSH);
+        }
+    }
+
+
 
     public static class PlayerLoggedInHandler {
         public static void onLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {

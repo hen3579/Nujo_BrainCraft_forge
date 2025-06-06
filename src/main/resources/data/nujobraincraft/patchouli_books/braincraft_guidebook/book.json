@@ -1,7 +1,7 @@
 {
-  "name": "My First Book!",
-  "landing_text": "Welcome to Patchouli",
+  "name": "Nujo's Braincraft Guidebook",
+  "landing_text": "Welcome to Nujo's Braincraft",
   "version": 1,
-  "creative_tab": "minecraft:tools_and_utilities",
+  "creative_tab": "nujobraincraft:nujo_tool_group",
   "use_resource_pack": true
 }

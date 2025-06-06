@@ -1,0 +1,23 @@
+{
+  "main_title_music": {
+    "sounds": [{
+      "name":"nujobraincraft:main_title_music",
+      "stream":"true",
+      "volume": 0.3
+    } 
+    ]
+  },
+  "singleplayer_start": {
+    "sounds": [{
+      "name":"nujobraincraft:singleplayer_start",
+      "stream":"true"
+    }]
+  },
+  "loading": {
+    "sounds": [{
+      "name":"nujobraincraft:loading",
+      "stream":"true"
+    }],
+    "subtitle": "subtitles.nujobraincraft.loading"
+  }
+}

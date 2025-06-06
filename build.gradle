@@ -1,3 +1,5 @@
+
+
 plugins {
     id 'eclipse'
     id 'idea'
@@ -144,6 +146,7 @@ minecraft {
 sourceSets.main.resources { srcDir 'src/generated/resources' }
 
 repositories {
+    mavenCentral()
     exclusiveContent {
         forRepository {
             maven {
@@ -154,6 +157,8 @@ repositories {
             includeGroup "curse.maven"
         }
     }
+    maven { url= 'https://maven.aliyun.com/repository/public'}
+    maven { url "https://maven.minecraftforge.net" }
     maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
     maven {
         name = 'GeckoLib'
@@ -173,12 +178,18 @@ repositories {
         name = "ModMaven"
         url = "https://modmaven.dev"
     }
-    flatDir {
+    maven { url 'https://repo.osgeo.org/repository/release/' } // 新增仓库
+    //maven { url "https://repository.bytedeco.jfrog.io/artifactory/snapshot/" }
+    //maven { url "https://maven.firstdark.dev/releases" }
+    /*flatDir {
         dir 'libs'
-    }
+    }*/
 }
 
 dependencies {
+    implementation 'org.jetbrains:annotations:24.0.0'
+
+
     // Specify the version of Minecraft to use.
     // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.
     // The "userdev" classifier will be requested and setup by ForgeGradle.
@@ -188,31 +199,58 @@ dependencies {
 
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
-    compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
-    runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
+    //compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-common-api:${jei_version}")
+   // compileOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge-api:${jei_version}")
+    //runtimeOnly fg.deobf("mezz.jei:jei-${minecraft_version}-forge:${jei_version}")
     //geckolib
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
     implementation("com.eliotlash.mclib:mclib:20")
     //帕秋莉手册
-    compileOnly fg.deobf("vazkii.patchouli:Patchouli:1.20.1-84-FORGE:api")
+    //compileOnly fg.deobf("vazkii.patchouli:Patchouli:1.20.1-84-FORGE:api")
     runtimeOnly fg.deobf("vazkii.patchouli:Patchouli:1.20.1-84-FORGE")
+
+
+    implementation "uk.co.caprica:vlcj:4.8.2"
+    implementation 'uk.co.caprica:vlcj-natives:4.8.0'
+    // 新增javafx支持
+
+/*    //javacv
+    implementation 'org.bytedeco:javacv-platform:1.5.8'
+    implementation 'org.bytedeco:ffmpeg-platform:5.1.2-1.5.8'
+    // 添加OpenCV平台依赖
+    implementation 'org.bytedeco:opencv-platform:4.6.0-1.5.8'
+
+    // 确保包含所有native依赖
+    implementation 'org.bytedeco:ffmpeg-platform-gpl:5.1.2-1.5.8'
+*/
+
+    // 新增LWJGL绑定
     // TerraBlender
-    implementation fg.deobf("com.github.glitchfiend:TerraBlender-forge:${minecraft_version}-${terrablender_version}")
+    //implementation fg.deobf("com.github.glitchfiend:TerraBlender-forge:${minecraft_version}-${terrablender_version}")
     //mixinextras
     implementation(jarJar("io.github.llamalad7:mixinextras-forge:0.4.1")) {
         jarJar.ranged(it, "[0.4.1,)")
     }
+    // 添加以下两行
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation 'org.spongepowered:mixin:0.8.5'
     // You may put jars on which you depend on in ./libs or
     // Example mod dependency using a mod jar from ./libs with a flat dir repository
     // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
     // The group id is ignored when searching -- in this case, it is "blank"
     // implementation fg.deobf("blank:coolmod-${mc_version}:${coolmod_version}")
     //RPM(local)
-    implementation fg.deobf("blank:RealPeacefulMode-${minecraft_version}:0.1.3")
+    // implementation fg.deobf("blank:RealPeacefulMode-${minecraft_version}:0.1.3")
     // For more info:
     // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
     // http://www.gradle.org/docs/current/userguide/dependency_management.html
+}
+mixin {
+    add sourceSets.main, "mixins.nujobraincraft.refmap.json"
+    config "mixins.nujobraincraft.json" // 添加此行
+    // 启用 mixin 优化
+    disableAnnotationProcessorCheck = true
+    defaultObfuscationEnv = "searge"
 }
 
 // This block of code expands all declared replace properties in the specified resource targets.
@@ -236,6 +274,11 @@ tasks.named('processResources', ProcessResources).configure {
 
 // Example for how to get properties into the manifest for reading at runtime.
 tasks.named('jar', Jar).configure {
+
+    // 通过排除不需要的依赖来优化
+    exclude "**/module-info.class"
+    exclude "**/*.html"
+    exclude "META-INF/maven/**"
     manifest {
         attributes([
                 'Specification-Title'     : mod_id,
@@ -273,4 +316,13 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+// 在文件末尾添加
+tasks.withType(CreateStartScripts).each { task ->
+    task.doLast {
+        def file = new File(task.outputDir, task.applicationName + ".bat")
+        String content = file.text
+        content = content.replace('@java', '@java -Xmx4096m -Dgradle.classpath.shrink=true -Dgradle.classpath.flat=true')
+        file.write(content)
+    }
 }

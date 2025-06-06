@@ -11,7 +11,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "nujo:imaginational_block"
+          "name": "nujobraincraft:imaginational_block"
         }
       ],
       "rolls": 1.0

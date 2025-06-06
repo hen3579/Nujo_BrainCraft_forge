@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "minVersion": "0.8.5",
+  "package": "com.Hen3579.Nujomod.Mixins",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "mixins.nujobraincraft.refmap.json", // 确保refmap字段存在
+  "mixins": [
+    "MenuMusicMixin"
+  ],
+  "client": [],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

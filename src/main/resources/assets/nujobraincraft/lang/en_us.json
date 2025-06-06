@@ -1,4 +1,8 @@
 {
   "message.nujobraincraft.welcome" : "Welcome to",
-  "message.nujobraincraft.modname" : "Nujobraincraft!"
+  "message.nujobraincraft.modname" : "NujoBraincraft!",
+
+  "item.nujobraincraft.nujo_item_group":"nujo‘s braincraft | item group",
+  "item.nujobraincraft.nujo_tool_group": "nujo‘s braincraft | tool group"
+
 }

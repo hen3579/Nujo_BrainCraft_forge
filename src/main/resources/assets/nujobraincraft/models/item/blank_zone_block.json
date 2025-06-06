@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "nujobraincraft:item/blank_zone_block"
+  }
+}

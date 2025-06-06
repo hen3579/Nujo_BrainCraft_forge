@@ -4,7 +4,7 @@
   "key": {
     "A": {"item": "minecraft:stick"},
     "B": {"tag": "minecraft:wool"},
-    "C": {"item": "nujo:imaginational_core"}
+    "C": {"item": "nujobraincraft:imaginational_core"}
   },
   "pattern":[
     "B  ",
@@ -12,7 +12,7 @@
     "  A"
   ],
   "result": {
-    "item": "nujo:magic_paintbrush",
+    "item": "nujobraincraft:magic_paintbrush",
     "count": 1
   }
 }
