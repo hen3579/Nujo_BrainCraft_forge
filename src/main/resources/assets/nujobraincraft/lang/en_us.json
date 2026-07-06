@@ -3,6 +3,7 @@
   "message.nujobraincraft.modname" : "NujoBraincraft!",
 
   "item.nujobraincraft.nujo_item_group":"nujo‘s braincraft | item group",
-  "item.nujobraincraft.nujo_tool_group": "nujo‘s braincraft | tool group"
+  "item.nujobraincraft.nujo_tool_group": "nujo‘s braincraft | tool group",
 
+  "item.nujobraincraft.smart_phone": "smart phone"
 }

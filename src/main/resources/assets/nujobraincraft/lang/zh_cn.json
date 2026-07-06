@@ -3,5 +3,7 @@
   "message.nujobraincraft.modname" : "NujoBraincraft!",
 
   "item.nujobraincraft.nujo_item_group":"脑洞世界 | 物品",
-  "item.nujobraincraft.nujo_tool_group":"脑洞世界 | 工具"
+  "item.nujobraincraft.nujo_tool_group":"脑洞世界 | 工具",
+
+  "item.nujobraincraft.smart_phone": "智能通讯机"
 }

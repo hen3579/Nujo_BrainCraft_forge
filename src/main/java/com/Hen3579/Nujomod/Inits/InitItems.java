@@ -22,6 +22,7 @@ import com.Hen3579.Nujomod.Items.Materials.*;
 import com.Hen3579.Nujomod.Items.Tools.*;
 import org.spongepowered.asm.util.IConsumer;
 
+
 import java.util.Set;
 import java.util.function.Consumer;
 import  net.minecraft.client.multiplayer.ClientLevel;
@@ -33,6 +34,9 @@ public class InitItems {
     public static void register(IEventBus eventBus){ITEMS.register(eventBus);
     }
     public static final RegistryObject<Item> MAGIC_PAINTBRUSH = ITEMS.register("magic_paintbrush", () -> new Item(new Item.Properties()));
+    // 修改原有注册项
+    public static final RegistryObject<Item> SMART_PHONE = ITEMS.register("smart_phone",
+            () -> new SmartPhone(new Item.Properties())); // 使用自定义的SmartPhone类
     public static final RegistryObject<Item> IMAGINATIONAL_CORE = ITEMS.register("imaginational_core", () -> new Item(new Item.Properties()));
     public static final RegistryObject<Item> NUJO_THINKER_SPAWN_EGG = ITEMS.register("nujo_thinker_spawn_egg",
             () -> new ForgeSpawnEggItem(InitEntity.NUJO_THINKER,

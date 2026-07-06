@@ -27,6 +27,7 @@ public class CreativeTabReg {
             .icon(()-> MAGIC_PAINTBRUSH.get().getDefaultInstance())
             .displayItems((par, output) -> {
                 output.accept(MAGIC_PAINTBRUSH.get());
+                output.accept(SMART_PHONE.get());
             }).build());
 
 
