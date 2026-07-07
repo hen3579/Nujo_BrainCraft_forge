@@ -75,9 +75,13 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
 
         if (mc.player == null) return;
 
-        // ===== 玩家头顶高亮ID（固定在屏幕居中偏上位置） =====
+        // ===== 玩家头顶高亮ID（位置随滚轮缩放动态变化） =====
         double screenX = screenWidth / 2.0;
-        double screenY = screenHeight / 2.0 - 50;
+        // 镜头越近（zoom越小），ID越远离中心；镜头越远（zoom越大），ID越靠近中心
+        double zoom = OrthoviewClientEvent.getZoom();
+        double offsetRatio = (OrthoviewClientEvent.ZOOM_MAX - zoom) / (OrthoviewClientEvent.ZOOM_MAX - OrthoviewClientEvent.ZOOM_MIN);
+        double maxOffset = -40.0; // 最近时偏上40px
+        double screenY = screenHeight / 2.0 + maxOffset * offsetRatio;
 
         String idName = "✦ " + mc.player.getDisplayName().getString() + " ✦";
         int textWidth = mc.font.width("§b" + idName);
@@ -91,5 +95,35 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
         guiGraphics.pose().scale(0.85f, 0.85f, 1.0f);
         guiGraphics.drawString(mc.font, "§b" + idName, -textWidth / 2, 0, 0xFFFFFF, false);
         guiGraphics.pose().popPose();
+
+        // ===== 弓蓄力进度条（在屏幕底部中央） =====
+        if (LockTargetSystem.getRangedState() == LockTargetSystem.RangedState.BOW_CHARGING) {
+            float progress = LockTargetSystem.getBowChargeProgress();
+            int barWidth = 100;
+            int barHeight = 6;
+            int barX = (screenWidth - barWidth) / 2;
+            int barY = screenHeight - 40;
+            int fillWidth = (int) (barWidth * progress);
+
+            // 背景
+            guiGraphics.fill(barX - 1, barY - 1, barX + barWidth + 1, barY + barHeight + 1, 0xFF333333);
+            // 进度填充（橙色渐变为金色）
+            int fillColor;
+            if (progress < 0.5f) {
+                // 橙色 → 黄橙色
+                fillColor = 0xFFFF8800;
+            } else {
+                // 黄橙色 → 金色
+                fillColor = 0xFFFFCC00;
+            }
+            if (fillWidth > 0) {
+                guiGraphics.fill(barX, barY, barX + fillWidth, barY + barHeight, fillColor);
+            }
+            // 文字："弓 蓄力 XX%"
+            String chargeText = "§e弓蓄力 " + (int)(progress * 100) + "%";
+            int chargeTextWidth = mc.font.width(chargeText);
+            guiGraphics.drawString(mc.font, chargeText,
+                    barX + (barWidth - chargeTextWidth) / 2, barY - 12, 0xFFFFFF, false);
+        }
     }
 }

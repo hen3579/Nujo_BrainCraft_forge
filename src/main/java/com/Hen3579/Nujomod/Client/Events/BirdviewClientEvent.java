@@ -55,6 +55,7 @@ public class BirdviewClientEvent {
             moveTarget = null; // 退出鸟瞰时清除移动目标
             OrthoviewClientEvent.clearMarkers(); // 清除点击标记
             LockTargetSystem.unlockTarget(); // 清除锁定目标
+            LockTargetSystem.clearRangedState(); // 清除远程攻击状态
         }
         return currentPerspective;
     }
@@ -89,6 +90,7 @@ public class BirdviewClientEvent {
         moveTarget = null;
         OrthoviewClientEvent.clearMarkers();
         LockTargetSystem.unlockTarget();
+        LockTargetSystem.clearRangedState();
     }
 
     /** 获取当前视角的中文名称（用于动作栏提示） */

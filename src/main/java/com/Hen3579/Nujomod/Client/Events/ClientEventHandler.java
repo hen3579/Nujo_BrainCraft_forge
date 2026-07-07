@@ -28,7 +28,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.BowItem;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -46,10 +45,13 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraft.ChatFormatting;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.Team;
 import org.jetbrains.annotations.NotNull;
+import org.lwjgl.glfw.GLFW;
 
 import static com.Hen3579.Nujomod.NujoBraincraft.MODID;
 
@@ -59,6 +61,9 @@ public class ClientEventHandler {
     public static final KeyMapping TOGGLE_FIRST_PERSON = createKeyMapping("toggle_first_person", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_FRONT = createKeyMapping("toggle_third_person_front", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_BACK = createKeyMapping("toggle_third_person_back", InputConstants.UNKNOWN.getValue());
+
+    /** 每 tick 标记：MouseButton.Pre 是否已消费了左键远程攻击（防止 consumeClick 双重触发） */
+    private static boolean rangedAttackConsumedThisTick = false;
 
     /**
      * 客户端刻事件：
@@ -121,14 +126,17 @@ public class ClientEventHandler {
             handleClickToMove(mc);
         }
 
-        // 鸟瞰模式下：左键单击生物 → 近身攻击
-        if (BirdviewClientEvent.isBirdseyeActive() && options.keyAttack.consumeClick()) {
-            handleClickToAttack(mc);
-        }
-
         // 鸟瞰模式：Tab 锁定/解锁最近的敌对生物
         if (BirdviewClientEvent.isBirdseyeActive() && options.keyPlayerList.consumeClick()) {
             LockTargetSystem.toggleLock();
+        }
+
+        // 鸟瞰模式：消费左键点击 → 攻击悬停的生物（近战/远程自动判断）
+        // 使用标志位防止 MouseButton.Pre 和 consumeClick 双重触发
+        if (BirdviewClientEvent.isBirdseyeActive() && options.keyAttack.consumeClick()) {
+            if (!rangedAttackConsumedThisTick) {
+                LockTargetSystem.tryAttackOnHover(mc);
+            }
         }
 
         // 鸟瞰模式：设置 yaw 对齐 + 平视
@@ -169,17 +177,26 @@ public class ClientEventHandler {
         // 再次设置 yaw，确保渲染使用正确的朝向
         applyCameraAlignedInput(mc);
 
-        // 弓箭蓄力每刻更新（左键触发后的满弦自动释放）
-        LockTargetSystem.tickBowCharge(mc);
-
         // 近战追杀每刻更新（左键触发后的自动追击）
         LockTargetSystem.chaseTick(mc);
 
-        // 以上两个方法内部会调用 faceEntity/faceEntityForBow 设置瞄准 pitch 以便
+        // 远程攻击每刻更新（弓蓄力释放、冷却递减等）
+        LockTargetSystem.rangedTick(mc);
+
+        // 以上方法内部会调用 faceEntity/calculateBallisticAim 设置瞄准 pitch 以便
         // 释放箭/近战攻击时弹道正确。释放/攻击完成后重置 pitch 为 0，
         // 确保鸟瞰模式下玩家模型始终平视（不低头抬头）
-        mc.player.setXRot(0);
-        mc.player.xRotO = 0;
+        // 但跳过弓刚释放的 tick：正发送 RELEASE_USE_ITEM 包给服务端，
+        // 此时 player.getXRot() 必须保持在弹道瞄准角度，服务端才能正确射出箭。
+        if (!LockTargetSystem.shouldSkipPitchReset()) {
+            mc.player.setXRot(0);
+            mc.player.xRotO = 0;
+        } else {
+            LockTargetSystem.clearSkipPitchReset();
+        }
+
+        // 重置每 tick 远程攻击消费标志（为下个 tick 准备）
+        rangedAttackConsumedThisTick = false;
     }
 
     // ===== 相机对齐输入 =====
@@ -320,43 +337,6 @@ public class ClientEventHandler {
             OrthoviewClientEvent.addClickMarker(targetPos);
         }
         // 如果没有命中方块（点击天空），不设置目标
-    }
-
-    /** 左键单击：自动锁定目标并攻击（近战追杀/弓箭蓄力），持弓时无悬停也自动索敌 */
-    private static void handleClickToAttack(Minecraft mc) {
-        // 已锁定：直接攻击（近战追杀或弓箭蓄力）
-        if (LockTargetSystem.isLocked()) {
-            LockTargetSystem.handleLockedAttack(mc);
-            return;
-        }
-
-        boolean holdingBow = mc.player.getMainHandItem().getItem() instanceof BowItem;
-
-        // 尝试获取攻击目标
-        Entity target = null;
-        HitResult hoverHit = BirdviewClientEvent.getHoveredHitResult();
-        if (hoverHit != null && hoverHit.getType() == HitResult.Type.ENTITY) {
-            target = ((EntityHitResult) hoverHit).getEntity();
-        }
-
-        // 持弓时：没有悬停生物则自动搜索最近的敌对生物
-        if (holdingBow && (target == null || !(target instanceof LivingEntity))) {
-            target = LockTargetSystem.findNearestHostile(mc.player);
-        }
-
-        if (!(target instanceof LivingEntity living)) {
-            return;
-        }
-
-        // 自动锁定并攻击（handleLockedAttack 根据武器类型：
-        // 弓→startBowAttack 蓄力射击，近战→startMeleeChase 追杀致死）
-        LockTargetSystem.lockToTarget(target);
-        mc.player.displayClientMessage(
-                net.minecraft.network.chat.Component.literal(
-                        "§b[锁定] §f已锁定 §e" + target.getDisplayName().getString()
-                ), true
-        );
-        LockTargetSystem.handleLockedAttack(mc);
     }
 
     /** 每帧向移动目标移动 */
@@ -679,6 +659,62 @@ public class ClientEventHandler {
             }
         }
 
+        // ===== 渲染远程攻击目标指示 =====
+        if (LockTargetSystem.isRanging()) {
+            LivingEntity rangedTarget = LockTargetSystem.getRangedTarget();
+            if (rangedTarget != null && rangedTarget.isAlive()) {
+                AABB targetBB = rangedTarget.getBoundingBox();
+
+                double minX = targetBB.minX - camPos.x;
+                double minY = targetBB.minY - camPos.y;
+                double minZ = targetBB.minZ - camPos.z;
+                double maxX = targetBB.maxX - camPos.x;
+                double maxY = targetBB.maxY - camPos.y;
+                double maxZ = targetBB.maxZ - camPos.z;
+
+                VertexConsumer consumer = mc.renderBuffers().bufferSource().getBuffer(RenderType.LINES);
+
+                // 橙色发光边框（与近战锁定目标的青色区分）
+                float expand = 0.15f;
+                poseStack.pushPose();
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        minX - expand, minY - expand, minZ - expand,
+                        maxX + expand, maxY + expand, maxZ + expand,
+                        1.0f, 0.6f, 0.0f, 0.9f);
+                poseStack.popPose();
+
+                // 头顶十字瞄准标记
+                double headY = targetBB.maxY - camPos.y + 0.8;
+                double centX = (targetBB.minX + targetBB.maxX) / 2.0 - camPos.x;
+                double centZ = (targetBB.minZ + targetBB.maxZ) / 2.0 - camPos.z;
+                float crossSize = 0.25f;
+                poseStack.pushPose();
+                poseStack.translate(centX, headY, centZ);
+                // 横线
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        -crossSize, -0.015f, -0.015f,
+                        crossSize, 0.015f, 0.015f,
+                        1.0f, 0.7f, 0.0f, 1.0f);
+                // 竖线
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        -0.015f, -crossSize, -0.015f,
+                        0.015f, crossSize, 0.015f,
+                        1.0f, 0.7f, 0.0f, 1.0f);
+                poseStack.popPose();
+
+                // 如果正在弓蓄力，绘制弹道预测线（从玩家到目标的弧形轨迹）
+                if (LockTargetSystem.getRangedState() == LockTargetSystem.RangedState.BOW_CHARGING) {
+                    float pt = mc.getFrameTime();
+                    Vec3 playerEye = mc.player.getEyePosition(pt)
+                            .subtract(camPos);
+                    Vec3 targetEye = rangedTarget.getEyePosition(pt)
+                            .subtract(camPos);
+                    drawBallisticTrajectory(poseStack, consumer, playerEye, targetEye,
+                            LockTargetSystem.getBowChargeProgress());
+                }
+            }
+        }
+
         // ===== 玩家脚下脉冲方环和头顶ID（始终显示） =====
         Vec3 pPos = mc.player.position();
 
@@ -786,6 +822,28 @@ public class ClientEventHandler {
         }
     }
 
+    /**
+     * 鸟瞰模式左键拦截（备用方案）：
+     * 直接裸拦截 GLFW 鼠标按钮事件，不受 KeyMapping consumeClick 时序问题影响。
+     * 左键按下 → 尝试远程攻击悬停的生物
+     */
+    @SubscribeEvent
+    public static void onMouseButton(InputEvent.MouseButton.Pre event) {
+        if (!BirdviewClientEvent.isBirdseyeActive()) return;
+        if (event.getAction() != GLFW.GLFW_PRESS) return;
+        if (event.getButton() != GLFW.GLFW_MOUSE_BUTTON_1) return; // 左键
+
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        // 防止在 GUI 打开时触发
+        if (mc.screen != null) return;
+
+        if (LockTargetSystem.tryAttackOnHover(mc)) {
+            rangedAttackConsumedThisTick = true;
+            event.setCanceled(true);
+        }
+    }
+
     private static @NotNull KeyMapping createKeyMapping(String key, int keyCode) {
         return new KeyMapping("key." + MODID + "." + key, keyCode, GENERAL);
     }
@@ -804,5 +862,62 @@ public class ClientEventHandler {
             friction = blockFriction * 0.91F;
         }
         return 1.0f / (1.0f - friction);
+    }
+
+    // ===== 弹道预测线绘制 =====
+
+    /**
+     * 绘制一条抛射轨迹预测线（从玩家眼睛到目标的弧形），
+     * 显示子弹/箭矢在重力影响下的飞行路径。
+     */
+    private static void drawBallisticTrajectory(PoseStack poseStack, VertexConsumer consumer,
+                                                 Vec3 fromRel, Vec3 toRel, float chargeProgress) {
+        // 使用 chargeProgress 估算弹丸速度 [0.25 ~ 1.0] 对应的倍数
+        double power = 0.25 + chargeProgress * 0.75; // 0.25→1.0
+        double v = 3.0 * power; // 箭的初速
+        double g = 0.05; // 重力
+
+        Vec3 diff = toRel.subtract(fromRel);
+        double dxz = Math.sqrt(diff.x * diff.x + diff.z * diff.z);
+        double dy = diff.y;
+
+        if (dxz < 0.5) return;
+
+        // 估算飞行时间
+        double time = dxz / (v * 0.8); // 粗略估算（cos(俯仰)≈0.8）
+
+        // 绘制 20 个线段
+        int segments = 20;
+        double dt = time / segments;
+
+        poseStack.pushPose();
+        for (int i = 0; i < segments; i++) {
+            double t1 = i * dt;
+            double t2 = (i + 1) * dt;
+
+            // 水平位置：匀速
+            double x1 = fromRel.x + diff.x * (t1 / time);
+            double z1 = fromRel.z + diff.z * (t1 / time);
+            double x2 = fromRel.x + diff.x * (t2 / time);
+            double z2 = fromRel.z + diff.z * (t2 / time);
+
+            // 垂直位置：抛物线
+            double y1 = fromRel.y + dy * (t1 / time) - 0.5 * g * t1 * t1;
+            double y2 = fromRel.y + dy * (t2 / time) - 0.5 * g * t2 * t2;
+
+            // 透明度随进度变化：从半透明到完全可见
+            float alpha = 0.3f + 0.7f * ((float) i / segments);
+
+            // 颜色：橙色渐变为金色
+            float r = 1.0f;
+            float gColor = 0.5f + 0.3f * ((float) i / segments);
+            float b = 0.0f;
+
+            LevelRenderer.renderLineBox(poseStack, consumer,
+                    Math.min(x1, x2) - 0.02f, Math.min(y1, y2) - 0.02f, Math.min(z1, z2) - 0.02f,
+                    Math.max(x1, x2) + 0.02f, Math.max(y1, y2) + 0.02f, Math.max(z1, z2) + 0.02f,
+                    r, gColor, b, alpha);
+        }
+        poseStack.popPose();
     }
 }

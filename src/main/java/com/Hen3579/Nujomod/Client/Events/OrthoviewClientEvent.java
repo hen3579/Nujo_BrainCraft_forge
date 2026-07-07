@@ -23,7 +23,7 @@ public class OrthoviewClientEvent {
     /** 默认 zoom：10 × 2 = 20 格垂直可见 */
     public static final double ZOOM_DEFAULT = 10.0;
     public static final double ZOOM_MIN = 3.0;
-    public static final double ZOOM_MAX = 30.0;
+    public static final double ZOOM_MAX = 25.0;
     /** 每格滚轮的缩放步进 */
     public static final double ZOOM_STEP = 3.0;
 
