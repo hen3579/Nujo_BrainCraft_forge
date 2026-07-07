@@ -87,8 +87,10 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
         int textWidth = mc.font.width("§b" + idName);
         int textX = (int) screenX - textWidth / 2;
         int textY = (int) screenY;
-        // 背景框（半透明黑）
-        guiGraphics.fill(textX - 6, textY - 3, textX + textWidth + 6, textY + 12, 0x80000000);
+        // 背景框（半透明黑），上下边距相等
+        int textH = (int) (mc.font.lineHeight * 0.85f); // 缩放后文字高度 ≈ 8
+        int pad = 3;
+        guiGraphics.fill(textX - 6, textY - pad, textX + textWidth + 6, textY + textH + pad, 0x80000000);
         // 青色文字（缩放 0.85x 略小）
         guiGraphics.pose().pushPose();
         guiGraphics.pose().translate((float) screenX, textY, 0);

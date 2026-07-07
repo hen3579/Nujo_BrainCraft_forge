@@ -15,6 +15,8 @@ import net.minecraft.world.entity.animal.IronGolem;
 import net.minecraft.world.entity.animal.Wolf;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
+import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -78,18 +80,20 @@ public class LockTargetSystem {
     // ===== 锁定/解锁操作 =====
 
     public static void toggleLock() {
-        if (isLocked()) {
-            unlockTarget();
-            return;
-        }
-
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
 
+        if (isLocked()) {
+            // 已锁定 → 切换到下一个敌对生物
+            cycleToNextHostile(mc);
+            return;
+        }
+
+        // 未锁定 → 锁定最近的敌对生物
         Entity nearest = findNearestHostile(mc.player);
         if (nearest != null) {
             lockToTarget(nearest);
-            startMeleeChase(mc, nearest); // 锁定后自动开始追杀
+            startMeleeChase(mc, nearest);
             mc.player.displayClientMessage(
                     net.minecraft.network.chat.Component.literal(
                             "§b[锁定] §f已锁定 §e" + nearest.getDisplayName().getString()
@@ -102,6 +106,62 @@ public class LockTargetSystem {
                     ), true
             );
         }
+    }
+
+    /** 切换到下一个敌对生物（按距离排序循环） */
+    private static void cycleToNextHostile(Minecraft mc) {
+        if (mc.player == null) return;
+        List<Entity> sorted = findAllHostileSorted(mc.player);
+        if (sorted.isEmpty()) {
+            unlockTarget();
+            mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal("§7[锁定] §f没有敌对生物"), true
+            );
+            return;
+        }
+
+        // 找当前锁定目标在列表中的位置
+        int currentIdx = -1;
+        for (int i = 0; i < sorted.size(); i++) {
+            if (sorted.get(i) == lockedTarget) {
+                currentIdx = i;
+                break;
+            }
+        }
+
+        if (currentIdx < 0) {
+            // 当前目标已不在列表中（可能已死亡）→ 锁定最近的
+            lockToTarget(sorted.get(0));
+            startMeleeChase(mc, sorted.get(0));
+            mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(
+                            "§b[切换] §f锁定 §e" + sorted.get(0).getDisplayName().getString()
+                    ), true
+            );
+            return;
+        }
+
+        // 循环到下一个
+        int nextIdx = (currentIdx + 1) % sorted.size();
+        if (nextIdx == currentIdx) {
+            // 只有一个目标
+            mc.player.displayClientMessage(
+                    net.minecraft.network.chat.Component.literal(
+                            "§7[锁定] §f仅此一个敌对生物 §e" + sorted.get(currentIdx).getDisplayName().getString()
+                    ), true
+            );
+            return;
+        }
+
+        Entity next = sorted.get(nextIdx);
+        stopChasing(); // 先停止旧的追杀
+        lockToTarget(next);
+        startMeleeChase(mc, next);
+        mc.player.displayClientMessage(
+                net.minecraft.network.chat.Component.literal(
+                        "§b[切换] §f切换到 §e" + next.getDisplayName().getString()
+                ), true
+        );
     }
 
     public static void lockToTarget(Entity entity) {
@@ -119,13 +179,16 @@ public class LockTargetSystem {
 
     @Nullable
     public static Entity findNearestHostile(Player player) {
+        List<Entity> sorted = findAllHostileSorted(player);
+        return sorted.isEmpty() ? null : sorted.get(0);
+    }
+
+    /** 获取按距离排序的所有敌对生物列表 */
+    private static List<Entity> findAllHostileSorted(Player player) {
         AABB searchBox = player.getBoundingBox().inflate(SEARCH_RANGE);
         List<Entity> candidates = player.level().getEntities(player, searchBox, HOSTILE_FILTER);
-
-        return candidates.stream()
-                .min(Comparator.comparingDouble(
-                        e -> e.distanceToSqr(player)))
-                .orElse(null);
+        candidates.sort(Comparator.comparingDouble(e -> e.distanceToSqr(player)));
+        return candidates;
     }
 
     private static final Predicate<Entity> HOSTILE_FILTER = entity -> {
@@ -538,13 +601,23 @@ public class LockTargetSystem {
                 serverPlayer.setXRot(aim[1]); serverPlayer.xRotO = aim[1];
                 serverPlayer.setYHeadRot(aim[0]); serverPlayer.yBodyRot = aim[0];
 
-                // 在服务端创建箭矢（完全绕过 CrossbowItem）
+                // 在服务端创建箭矢，应用弩附魔效果
+                ItemStack crossbowStack = serverPlayer.getMainHandItem();
                 net.minecraft.world.entity.projectile.Arrow arrow = new net.minecraft.world.entity.projectile.Arrow(
                         serverLevel, serverPlayer);
                 Vec3 eyePos = serverPlayer.getEyePosition(1.0f);
                 arrow.setPos(eyePos.x, eyePos.y - 0.1, eyePos.z);
                 arrow.setOwner(serverPlayer);
                 arrow.setCritArrow(true);
+
+                // 应用弩伤害加成（CrossbowItem 默认箭矢伤害更高）
+                arrow.setBaseDamage(arrow.getBaseDamage() + 1.0); // 弩比弓伤害略高
+
+                // 应用穿透附魔
+                int piercing = EnchantmentHelper.getItemEnchantmentLevel(Enchantments.PIERCING, crossbowStack);
+                if (piercing > 0) {
+                    arrow.setPierceLevel((byte) piercing);
+                }
 
                 // 精确抛物线弹道
                 Vec3 targetPos = target.getEyePosition(1.0f);
