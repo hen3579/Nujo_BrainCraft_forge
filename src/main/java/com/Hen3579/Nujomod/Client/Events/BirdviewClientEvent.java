@@ -6,6 +6,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector4f;
 
 /**
  * 视角循环状态管理器
@@ -18,7 +20,7 @@ public class BirdviewClientEvent {
     private static boolean birdseyeActive = false;
 
     /** 鸟瞰视角高度（玩家上方格数） */
-    public static final double BIRDSEYE_HEIGHT = 20.0;
+    public static final double BIRDSEYE_HEIGHT = 10.0;
 
     /** 鸟瞰视角俯仰角（0=平视, 90=垂直向下），RTS 风格约 45°（参考 Reign of Nether） */
     public static final float BIRDSEYE_PITCH = 45.0F;
@@ -51,6 +53,8 @@ public class BirdviewClientEvent {
         birdseyeActive = (currentPerspective == 3);
         if (!birdseyeActive) {
             moveTarget = null; // 退出鸟瞰时清除移动目标
+            OrthoviewClientEvent.clearMarkers(); // 清除点击标记
+            LockTargetSystem.unlockTarget(); // 清除锁定目标
         }
         return currentPerspective;
     }
@@ -83,6 +87,8 @@ public class BirdviewClientEvent {
         currentPerspective = 0;
         birdseyeActive = false;
         moveTarget = null;
+        OrthoviewClientEvent.clearMarkers();
+        LockTargetSystem.unlockTarget();
     }
 
     /** 获取当前视角的中文名称（用于动作栏提示） */
@@ -222,5 +228,57 @@ public class BirdviewClientEvent {
     @Nullable
     public static Matrix4f getCachedModelViewMatrix() {
         return cachedModelViewMatrix;
+    }
+
+    // ===== 缓存的相机位置和旋转（用于 GUI overlay 投影） =====
+
+    @Nullable
+    private static Vec3 cachedCameraPos = null;
+    @Nullable
+    private static Quaternionf cachedCameraRot = null;
+
+    /** 保存相机数据（由 onRenderLevelStage 每帧更新） */
+    public static void cacheCameraData(Vec3 pos, Quaternionf rot) {
+        cachedCameraPos = pos;
+        cachedCameraRot = new Quaternionf(rot);
+    }
+
+    @Nullable
+    public static Vec3 getCachedCameraPos() {
+        return cachedCameraPos;
+    }
+
+    @Nullable
+    public static Quaternionf getCachedCameraRot() {
+        return cachedCameraRot;
+    }
+
+    /**
+     * 将世界坐标投影到屏幕坐标（使用缓存的投影矩阵和相机数据）。
+     * @return [screenX, screenY] 或 null（投影失败、不在视口内）
+     */
+    @Nullable
+    public static double[] worldToScreen(Vec3 worldPos, int screenWidth, int screenHeight) {
+        if (cachedProjMatrix == null || cachedCameraPos == null || cachedCameraRot == null) return null;
+
+        // 1. 世界位置 → 相机空间（平移 + 旋转）
+        Vec3 relative = worldPos.subtract(cachedCameraPos);
+        Vector4f camSpace = new Vector4f((float) relative.x, (float) relative.y, (float) relative.z, 1.0f);
+        // 应用相机旋转的逆（世界→相机）
+        Quaternionf invRot = new Quaternionf(cachedCameraRot).conjugate();
+        camSpace.rotate(invRot); // 等价于乘以 rotation matrix
+
+        // 2. 相机空间 → 裁剪空间（投影矩阵）
+        Vector4f clipSpace = cachedProjMatrix.transform(camSpace);
+
+        // 3. 裁剪 → NDC → 屏幕坐标
+        if (clipSpace.w == 0) return null;
+        float ndcX = clipSpace.x / clipSpace.w;
+        float ndcY = clipSpace.y / clipSpace.w;
+        if (ndcX < -1 || ndcX > 1 || ndcY < -1 || ndcY > 1) return null; // 不在视口内
+
+        double screenX = (ndcX + 1.0) * 0.5 * screenWidth;
+        double screenY = (1.0 - ndcY) * 0.5 * screenHeight;
+        return new double[]{screenX, screenY};
     }
 }

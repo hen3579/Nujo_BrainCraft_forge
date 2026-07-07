@@ -8,17 +8,27 @@ import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
+import org.lwjgl.glfw.GLFW;
 
 import net.minecraft.client.Camera;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
+import net.minecraft.client.model.EntityModel;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BowItem;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -35,6 +45,10 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraft.ChatFormatting;
+import net.minecraft.world.scores.PlayerTeam;
+import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.Team;
 import org.jetbrains.annotations.NotNull;
 
 import static com.Hen3579.Nujomod.NujoBraincraft.MODID;
@@ -73,9 +87,25 @@ public class ClientEventHandler {
             BirdviewClientEvent.cyclePerspective();
             int newPerspective = BirdviewClientEvent.getCurrentPerspective();
 
-            // 进入鸟瞰模式时锁定相机朝向
+            // 进入鸟瞰模式时锁定相机朝向 + 开启玩家发光描边
             if (newPerspective == 3 && prevPerspective != 3) {
                 BirdviewClientEvent.onEnterBirdseye(mc.player.getYRot());
+                setupBirdviewGlow(mc);
+            }
+
+            // 退出鸟瞰时：关闭发光描边
+            if (prevPerspective == 3 && newPerspective != 3) {
+                clearBirdviewGlow(mc);
+            }
+
+            // 退出鸟瞰时立即恢复光标为 DISABLED（第一人称状态），
+            // 不等 overlay 渲染（防止光标在切换瞬间暴露）
+            if (!BirdviewClientEvent.isBirdseyeActive()) {
+                Window window = mc.getWindow();
+                if (window != null) {
+                    GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
+                }
+                BirdviewClientEvent.clearVirtCursor();
             }
 
             CameraType cameraType = BirdviewClientEvent.getCameraType();
@@ -94,6 +124,11 @@ public class ClientEventHandler {
         // 鸟瞰模式下：左键单击生物 → 近身攻击
         if (BirdviewClientEvent.isBirdseyeActive() && options.keyAttack.consumeClick()) {
             handleClickToAttack(mc);
+        }
+
+        // 鸟瞰模式：Tab 锁定/解锁最近的敌对生物
+        if (BirdviewClientEvent.isBirdseyeActive() && options.keyPlayerList.consumeClick()) {
+            LockTargetSystem.toggleLock();
         }
 
         // 鸟瞰模式：设置 yaw 对齐 + 平视
@@ -133,6 +168,18 @@ public class ClientEventHandler {
 
         // 再次设置 yaw，确保渲染使用正确的朝向
         applyCameraAlignedInput(mc);
+
+        // 弓箭蓄力每刻更新（左键触发后的满弦自动释放）
+        LockTargetSystem.tickBowCharge(mc);
+
+        // 近战追杀每刻更新（左键触发后的自动追击）
+        LockTargetSystem.chaseTick(mc);
+
+        // 以上两个方法内部会调用 faceEntity/faceEntityForBow 设置瞄准 pitch 以便
+        // 释放箭/近战攻击时弹道正确。释放/攻击完成后重置 pitch 为 0，
+        // 确保鸟瞰模式下玩家模型始终平视（不低头抬头）
+        mc.player.setXRot(0);
+        mc.player.xRotO = 0;
     }
 
     // ===== 相机对齐输入 =====
@@ -161,6 +208,43 @@ public class ClientEventHandler {
 
         // 冲刺
         mc.player.setSprinting(mc.options.keySprint.isDown() && wasdPressed);
+    }
+
+    // ===== 玩家发光描边（通过 EntityRenderDispatcher 手动渲染触发 outline） =====
+
+    /** 进入鸟瞰时：设置青色 team + 基础 glowing 字段 */
+    private static void setupBirdviewGlow(Minecraft mc) {
+        if (mc.level == null || mc.player == null) return;
+        // 创建青色 team（outline 颜色来源）
+        Scoreboard scoreboard = mc.level.getScoreboard();
+        PlayerTeam team = scoreboard.getPlayerTeam("nujo_bv_glow");
+        if (team == null) {
+            team = scoreboard.addPlayerTeam("nujo_bv_glow");
+            team.setColor(ChatFormatting.AQUA);
+            team.setNameTagVisibility(Team.Visibility.NEVER);
+            team.setDeathMessageVisibility(Team.Visibility.NEVER);
+            team.setCollisionRule(Team.CollisionRule.NEVER);
+            team.setAllowFriendlyFire(true);
+        }
+        PlayerTeam currentTeam = scoreboard.getPlayersTeam(mc.player.getScoreboardName());
+        if (currentTeam != null && !currentTeam.getName().equals("nujo_bv_glow")) {
+            scoreboard.removePlayerFromTeam(mc.player.getScoreboardName(), currentTeam);
+        }
+        if (!team.getPlayers().contains(mc.player.getScoreboardName())) {
+            scoreboard.addPlayerToTeam(mc.player.getScoreboardName(), team);
+        }
+        mc.player.setGlowingTag(true);
+    }
+
+    /** 退出鸟瞰时：关闭发光 + 移除 team */
+    private static void clearBirdviewGlow(Minecraft mc) {
+        if (mc.level == null || mc.player == null) return;
+        Scoreboard scoreboard = mc.level.getScoreboard();
+        PlayerTeam team = scoreboard.getPlayerTeam("nujo_bv_glow");
+        if (team != null && team.getPlayers().contains(mc.player.getScoreboardName())) {
+            scoreboard.removePlayerFromTeam(mc.player.getScoreboardName(), team);
+        }
+        mc.player.setGlowingTag(false);
     }
 
     // ===== 射线检测位置（overlay 60 FPS 更新 virtCursor，直接读取即可） =====
@@ -232,35 +316,47 @@ public class ClientEventHandler {
             Vec3 hitPos = hit.getLocation();
             Vec3 targetPos = hitPos.add(hit.getDirection().getStepX() * 0.5, 0, hit.getDirection().getStepZ() * 0.5);
             BirdviewClientEvent.setMoveTarget(targetPos);
+            // 添加点击标记痕迹
+            OrthoviewClientEvent.addClickMarker(targetPos);
         }
         // 如果没有命中方块（点击天空），不设置目标
     }
 
-    /** 左键单击：近身攻击悬停的生物 */
+    /** 左键单击：自动锁定目标并攻击（近战追杀/弓箭蓄力），持弓时无悬停也自动索敌 */
     private static void handleClickToAttack(Minecraft mc) {
+        // 已锁定：直接攻击（近战追杀或弓箭蓄力）
+        if (LockTargetSystem.isLocked()) {
+            LockTargetSystem.handleLockedAttack(mc);
+            return;
+        }
+
+        boolean holdingBow = mc.player.getMainHandItem().getItem() instanceof BowItem;
+
+        // 尝试获取攻击目标
+        Entity target = null;
         HitResult hoverHit = BirdviewClientEvent.getHoveredHitResult();
-        if (hoverHit == null || hoverHit.getType() != HitResult.Type.ENTITY) {
+        if (hoverHit != null && hoverHit.getType() == HitResult.Type.ENTITY) {
+            target = ((EntityHitResult) hoverHit).getEntity();
+        }
+
+        // 持弓时：没有悬停生物则自动搜索最近的敌对生物
+        if (holdingBow && (target == null || !(target instanceof LivingEntity))) {
+            target = LockTargetSystem.findNearestHostile(mc.player);
+        }
+
+        if (!(target instanceof LivingEntity living)) {
             return;
         }
 
-        Entity target = ((net.minecraft.world.phys.EntityHitResult) hoverHit).getEntity();
-        // 只对 LivingEntity 攻击
-        if (!(target instanceof net.minecraft.world.entity.LivingEntity living)) {
-            return;
-        }
-
-        // 让玩家面向目标
-        Vec3 toTarget = living.position().subtract(mc.player.position());
-        float targetYaw = (float) Math.toDegrees(Math.atan2(-toTarget.x, toTarget.z));
-        mc.player.setYRot(targetYaw);
-        mc.player.yRotO = targetYaw;
-        mc.player.setYHeadRot(targetYaw);
-
-        // 触发玩家攻击动作（minecraft.player.attack(entity)）
-        mc.gameMode.attack(mc.player, living);
-
-        // 播放挥动手和挥击音效
-        mc.player.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        // 自动锁定并攻击（handleLockedAttack 根据武器类型：
+        // 弓→startBowAttack 蓄力射击，近战→startMeleeChase 追杀致死）
+        LockTargetSystem.lockToTarget(target);
+        mc.player.displayClientMessage(
+                net.minecraft.network.chat.Component.literal(
+                        "§b[锁定] §f已锁定 §e" + target.getDisplayName().getString()
+                ), true
+        );
+        LockTargetSystem.handleLockedAttack(mc);
     }
 
     /** 每帧向移动目标移动 */
@@ -397,10 +493,14 @@ public class ClientEventHandler {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES) return;
         if (!BirdviewClientEvent.isBirdseyeActive()) return;
 
-        // 缓存当前渲染矩阵（供 overlay 做 3D→屏幕投影）
+        // 缓存当前渲染矩阵和相机数据（供 GUI overlay 做 3D→屏幕投影）
         BirdviewClientEvent.setCachedMatrices(
                 RenderSystem.getProjectionMatrix(),
                 RenderSystem.getModelViewMatrix()
+        );
+        BirdviewClientEvent.cacheCameraData(
+                event.getCamera().getPosition(),
+                event.getCamera().rotation()
         );
 
         Minecraft mc = Minecraft.getInstance();
@@ -452,45 +552,156 @@ public class ClientEventHandler {
             poseStack.popPose();
         }
 
-        // ===== 渲染 3D 光标：在命中点绘制十字准星，真正"贴在地面" =====
-        Vec3 cursorWorldPos = null;
-        if (hoverHit != null && hoverHit.getType() != HitResult.Type.MISS) {
-            cursorWorldPos = hoverHit.getLocation();
-        } else if (mc.player != null) {
-            // 无命中时使用玩家所在位置的地面
-            cursorWorldPos = mc.player.position().add(0, -0.5, 0);
-        }
-        if (cursorWorldPos != null) {
+        // ===== 渲染右键点击移动痕迹 =====
+        for (OrthoviewClientEvent.ClickMarker marker : OrthoviewClientEvent.getActiveMarkers()) {
+            float age = marker.getAge(); // [0, 1]
+            // 颜色过渡：青(0) → 绿(0.33) → 黄(0.66) → 红(0.9) → 淡出(1)
+            float r, g, b, a;
+            if (age < 0.33f) {
+                float t = age / 0.33f;
+                r = 0; g = 1; b = 1 - t; a = 1.0f;
+            } else if (age < 0.66f) {
+                float t = (age - 0.33f) / 0.33f;
+                r = t; g = 1; b = 0; a = 1.0f;
+            } else if (age < 0.9f) {
+                float t = (age - 0.66f) / 0.24f;
+                r = 1; g = 1 - t; b = 0; a = 1.0f;
+            } else {
+                float t = (age - 0.9f) / 0.1f;
+                r = 1; g = 0; b = 0; a = 1.0f - t;
+            }
+
             poseStack.pushPose();
             poseStack.translate(
-                    cursorWorldPos.x - camPos.x,
-                    cursorWorldPos.y - camPos.y,
-                    cursorWorldPos.z - camPos.z
+                    marker.position.x - camPos.x,
+                    marker.position.y + 0.05 - camPos.y,
+                    marker.position.z - camPos.z
             );
 
             VertexConsumer consumer = mc.renderBuffers().bufferSource().getBuffer(RenderType.LINES);
-            float len = 0.18f;
-            float thick = 0.02f;
+            float thick = 0.03f;
 
-            // X 轴方向臂（金色 wireframe 小方块)
+            // 环缩小动画：从大缩小到小
+            float halfSize = 1.0f - age * 0.9f; // 1.0 → 0.1
+
+            // 内圈
             LevelRenderer.renderLineBox(poseStack, consumer,
-                    -len, -thick, -thick, len, thick, thick,
-                    1.0f, 0.85f, 0.0f, 1.0f);
-            // Z 轴方向臂
+                    -halfSize, -thick, -halfSize,
+                    halfSize, thick, halfSize,
+                    r, g, b, a);
+
+            // 外圈（跟随缩小，略大一点）
+            float outer = halfSize * 1.2f;
+            float outerThick = thick * (0.5f + 0.5f * (1 - age));
             LevelRenderer.renderLineBox(poseStack, consumer,
-                    -thick, -thick, -len, thick, thick, len,
-                    1.0f, 0.85f, 0.0f, 1.0f);
-            // 中心高亮点
-            LevelRenderer.renderLineBox(poseStack, consumer,
-                    -thick * 2, -thick * 2, -thick * 2,
-                    thick * 2, thick * 2, thick * 2,
-                    1.0f, 1.0f, 1.0f, 1.0f);
+                    -outer, -outerThick, -outer,
+                    outer, outerThick, outer,
+                    r * 0.6f, g * 0.6f, b * 0.6f, a * 0.5f);
 
             poseStack.popPose();
         }
-    }
 
-    // ===== 玩家复活 =====
+        // ===== 渲染锁定目标视觉反馈 =====
+        if (LockTargetSystem.isLocked()) {
+            Entity locked = LockTargetSystem.getLockedTarget();
+            if (locked != null) {
+                AABB lockedBB = locked.getBoundingBox();
+                double lockAgeSec = LockTargetSystem.getLockDurationMs() / 1000.0;
+                double pulse = 0.15 * Math.sin(lockAgeSec * Math.PI * 2.0); // 1Hz 脉动
+
+                double minX = lockedBB.minX - camPos.x;
+                double minY = lockedBB.minY - camPos.y;
+                double minZ = lockedBB.minZ - camPos.z;
+                double maxX = lockedBB.maxX - camPos.x;
+                double maxY = lockedBB.maxY - camPos.y;
+                double maxZ = lockedBB.maxZ - camPos.z;
+
+                VertexConsumer consumer = mc.renderBuffers().bufferSource().getBuffer(RenderType.LINES);
+
+                // 1. 青色发光边框（略放大）
+                float expand = 0.1f;
+                poseStack.pushPose();
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        minX - expand, minY - expand, minZ - expand,
+                        maxX + expand, maxY + expand, maxZ + expand,
+                        0.0f, 0.9f, 1.0f, 0.8f);
+                poseStack.popPose();
+
+                // 2. 地面脉动方环
+                double groundY = lockedBB.minY - camPos.y;
+                float ringSize = 0.8f + (float) pulse;
+                float ringThick = 0.04f;
+                poseStack.pushPose();
+                poseStack.translate(
+                        (lockedBB.minX + lockedBB.maxX) / 2.0 - camPos.x,
+                        groundY + 0.05,
+                        (lockedBB.minZ + lockedBB.maxZ) / 2.0 - camPos.z
+                );
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        -ringSize, -ringThick, -ringSize,
+                        ringSize, ringThick, ringSize,
+                        0.0f, 0.9f, 1.0f, 0.6f);
+                // 外圈略大
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        -ringSize * 1.25f, -ringThick * 0.6f, -ringSize * 1.25f,
+                        ringSize * 1.25f, ringThick * 0.6f, ringSize * 1.25f,
+                        0.0f, 0.7f, 0.8f, 0.35f);
+                poseStack.popPose();
+
+                // 3. 头顶菱形标记
+                double headY = lockedBB.maxY - camPos.y + 0.5;
+                double centerX = (lockedBB.minX + lockedBB.maxX) / 2.0 - camPos.x;
+                double centerZ = (lockedBB.minZ + lockedBB.maxZ) / 2.0 - camPos.z;
+                float diamondSize = 0.2f + (float) pulse * 0.5f;
+                poseStack.pushPose();
+                poseStack.translate(centerX, headY, centerZ);
+                // 环形排列的短线段，形成菱形
+                float[][] diamondPoints = {
+                        {0, 0, diamondSize}, {0, 0, -diamondSize},
+                        {diamondSize, 0, 0}, {-diamondSize, 0, 0},
+                        {0, diamondSize, 0}, {0, -diamondSize, 0},
+                };
+                // 水平菱形
+                for (int i = 0; i < 4; i++) {
+                    float[] p1 = diamondPoints[i];
+                    float[] p2 = diamondPoints[(i + 1) % 4];
+                    LevelRenderer.renderLineBox(poseStack, consumer,
+                            Math.min(p1[0], p2[0]) - 0.01f, -0.01f, Math.min(p1[2], p2[2]) - 0.01f,
+                            Math.max(p1[0], p2[0]) + 0.01f, 0.01f, Math.max(p1[2], p2[2]) + 0.01f,
+                            0.0f, 1.0f, 0.8f, 0.9f);
+                }
+                // 垂直方向标记
+                LevelRenderer.renderLineBox(poseStack, consumer,
+                        -0.01f, -diamondSize, -0.01f,
+                        0.01f, diamondSize, 0.01f,
+                        0.0f, 1.0f, 0.8f, 0.9f);
+                poseStack.popPose();
+            }
+        }
+
+        // ===== 玩家脚下脉冲方环和头顶ID（始终显示） =====
+        Vec3 pPos = mc.player.position();
+
+        // 脚下青色脉冲方环（RTS 选中样式）
+        poseStack.pushPose();
+        poseStack.translate(pPos.x - camPos.x, pPos.y - 0.02 - camPos.y, pPos.z - camPos.z);
+        VertexConsumer ringConsumer = mc.renderBuffers().bufferSource().getBuffer(RenderType.LINES);
+        double pulseRing = 0.1 * Math.sin((System.currentTimeMillis() % 2000) / 1000.0 * Math.PI * 2);
+        float ring = 0.7f + (float) pulseRing;
+        float ringThick = 0.06f;
+        // 内圈（亮青色）
+        LevelRenderer.renderLineBox(poseStack, ringConsumer,
+                -ring, -ringThick, -ring, ring, ringThick, ring,
+                0.0f, 1.0f, 0.85f, 1.0f);
+        // 外圈（淡青色，略大）
+        LevelRenderer.renderLineBox(poseStack, ringConsumer,
+                -ring * 1.3f, -ringThick * 0.5f, -ring * 1.3f,
+                ring * 1.3f, ringThick * 0.5f, ring * 1.3f,
+                0.0f, 0.7f, 0.6f, 0.6f);
+        poseStack.popPose();
+
+        // 2. 头顶高亮ID标签（已改用 GUI Overlay 渲染，见 BirdviewCursorOverlay）
+    }
 
     /**
      * 玩家复活时重置为第一人称（避免死在鸟瞰视角下卡住）
@@ -499,7 +710,9 @@ public class ClientEventHandler {
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity().level().isClientSide) {
             BirdviewClientEvent.reset();
-            Minecraft.getInstance().options.setCameraType(CameraType.FIRST_PERSON);
+            Minecraft mc = Minecraft.getInstance();
+            mc.options.setCameraType(CameraType.FIRST_PERSON);
+            clearBirdviewGlow(mc);
         }
     }
 

@@ -2,22 +2,28 @@ package com.Hen3579.Nujomod.Client.Events;
 
 import com.mojang.blaze3d.platform.Window;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 /**
  * 鸟瞰模式正交投影和缩放控制。
  * 参考 Reign of Nether 的 RTS 正交投影方案：
  * - 用 OrthoViewMixin 替换 LevelRenderer 的透视投影为正交投影
- * - Zoom 控制可见范围（block 数），默认 30，范围 10–90
+ * - Zoom 控制可见范围（block 数），默认 30，范围 5–90
+ * - 右键点击移动的快捷标记痕迹
  */
 public class OrthoviewClientEvent {
 
     // ========== 缩放 ==========
 
-    /** 默认 zoom：30 × 2 = 60 格垂直可见 */
-    public static final double ZOOM_DEFAULT = 30.0;
-    public static final double ZOOM_MIN = 10.0;
-    public static final double ZOOM_MAX = 90.0;
+    /** 默认 zoom：10 × 2 = 20 格垂直可见 */
+    public static final double ZOOM_DEFAULT = 10.0;
+    public static final double ZOOM_MIN = 3.0;
+    public static final double ZOOM_MAX = 30.0;
     /** 每格滚轮的缩放步进 */
     public static final double ZOOM_STEP = 3.0;
 
@@ -64,5 +70,54 @@ public class OrthoviewClientEvent {
                 -halfHeight, halfHeight,
                 0.1f, 1000.0f
         );
+    }
+
+    // ========== 右键点击标记痕迹 ==========
+
+    /** 标记持续时间（毫秒） */
+    private static final long MARKER_DURATION_MS = 1000;
+
+    /** 单次标记的数据 */
+    public static class ClickMarker {
+        public final Vec3 position;
+        public final long createdTime;
+
+        public ClickMarker(Vec3 position) {
+            this.position = position;
+            this.createdTime = System.currentTimeMillis();
+        }
+
+        /** 获取已过时间比例 [0, 1]，1 = 应移除 */
+        public float getAge() {
+            return Math.min(1.0f, (System.currentTimeMillis() - createdTime) / (float) MARKER_DURATION_MS);
+        }
+
+        /** 是否已过期 */
+        public boolean isExpired() {
+            return System.currentTimeMillis() - createdTime >= MARKER_DURATION_MS;
+        }
+    }
+
+    private static final List<ClickMarker> clickMarkers = new ArrayList<>();
+
+    /** 添加一个点击标记 */
+    public static void addClickMarker(Vec3 position) {
+        clickMarkers.add(new ClickMarker(position));
+    }
+
+    /** 获取所有尚未过期的标记（同时清理过期标记） */
+    public static List<ClickMarker> getActiveMarkers() {
+        Iterator<ClickMarker> it = clickMarkers.iterator();
+        while (it.hasNext()) {
+            if (it.next().isExpired()) {
+                it.remove();
+            }
+        }
+        return clickMarkers;
+    }
+
+    /** 退出鸟瞰时清除所有标记 */
+    public static void clearMarkers() {
+        clickMarkers.clear();
     }
 }

@@ -2,13 +2,9 @@ package com.Hen3579.Nujomod.Client.Events;
 
 import com.Hen3579.Nujomod.NujoBraincraft;
 import com.mojang.blaze3d.platform.Window;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 import org.lwjgl.glfw.GLFW;
@@ -40,10 +36,10 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
         Window window = mc.getWindow();
         boolean active = BirdviewClientEvent.isBirdseyeActive();
 
-        // 退出鸟瞰 → 恢复系统光标 + 清除虚拟光标
+        // 退出鸟瞰 → 恢复系统光标为 DISABLED（第一人称状态）+ 清除虚拟光标
         if (!active) {
             if (wasActive) {
-                GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_NORMAL);
+                GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
                 BirdviewClientEvent.clearVirtCursor();
                 wasActive = false;
             }
@@ -79,13 +75,21 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
 
         if (mc.player == null) return;
 
-        // ===== 在屏幕中心画一个非常小的瞄准点（只有 2px × 2px），帮助对齐 =====
-        HitResult hoverHit = BirdviewClientEvent.getHoveredHitResult();
-        boolean onEntity = hoverHit != null && hoverHit.getType() == HitResult.Type.ENTITY
-                && ((EntityHitResult) hoverHit).getEntity() instanceof LivingEntity;
+        // ===== 玩家头顶高亮ID（固定在屏幕居中偏上位置） =====
+        double screenX = screenWidth / 2.0;
+        double screenY = screenHeight / 2.0 - 50;
 
-        int centerGuiX = screenWidth / 2;
-        int centerGuiY = screenHeight / 2;
-        guiGraphics.fill(centerGuiX - 1, centerGuiY - 1, centerGuiX + 2, centerGuiY + 2, 0x44FFFFFF);
+        String idName = "✦ " + mc.player.getDisplayName().getString() + " ✦";
+        int textWidth = mc.font.width("§b" + idName);
+        int textX = (int) screenX - textWidth / 2;
+        int textY = (int) screenY;
+        // 背景框（半透明黑）
+        guiGraphics.fill(textX - 6, textY - 3, textX + textWidth + 6, textY + 12, 0x80000000);
+        // 青色文字（缩放 0.85x 略小）
+        guiGraphics.pose().pushPose();
+        guiGraphics.pose().translate((float) screenX, textY, 0);
+        guiGraphics.pose().scale(0.85f, 0.85f, 1.0f);
+        guiGraphics.drawString(mc.font, "§b" + idName, -textWidth / 2, 0, 0xFFFFFF, false);
+        guiGraphics.pose().popPose();
     }
 }
