@@ -7,6 +7,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 /**
@@ -30,6 +31,9 @@ public class BirdviewClientEvent {
 
     /** 当前相机的 look-at yaw，用于计算相机对齐移动方向 */
     private static float cameraLookYaw = 0f;
+
+    /** 当前相机的 look-at pitch，用于 screenPosToWorldPos 精确反算 */
+    private static float cameraLookPitch = BIRDSEYE_PITCH;
 
     /** 点击移动的目标位置（null = 无目标） */
     @Nullable
@@ -130,6 +134,16 @@ public class BirdviewClientEvent {
     /** 获取当前相机的 look-at yaw（相机看向玩家的方向） */
     public static float getCameraLookYaw() {
         return cameraLookYaw;
+    }
+
+    /** 保存当前相机的 look-at pitch（由 onComputeCameraAngles 算出） */
+    public static void setCameraLookPitch(float pitch) {
+        cameraLookPitch = pitch;
+    }
+
+    /** 获取当前相机的 look-at pitch */
+    public static float getCameraLookPitch() {
+        return cameraLookPitch;
     }
 
     // ===== 点击移动目标 =====
@@ -257,6 +271,7 @@ public class BirdviewClientEvent {
 
     /**
      * 将世界坐标投影到屏幕坐标（使用缓存的投影矩阵和相机数据）。
+     * 正交投影下仍然有效（ortho 矩阵 w=1，透视除法退化为 identity）。
      * @return [screenX, screenY] 或 null（投影失败、不在视口内）
      */
     @Nullable
@@ -282,5 +297,79 @@ public class BirdviewClientEvent {
         double screenX = (ndcX + 1.0) * 0.5 * screenWidth;
         double screenY = (1.0 - ndcY) * 0.5 * screenHeight;
         return new double[]{screenX, screenY};
+    }
+
+    // ===== 正交投影纯数学反算：屏幕坐标 → 世界坐标（参考 Reign of Nether） =====
+
+    /**
+     * 正交投影下的屏幕坐标 → 世界地面 XZ 坐标。
+     * 纯数学 pixelsToBlocks 反算，不依赖任何渲染缓存数据（投影矩阵/相机四元数）。
+     * 参考 Reign of Nether 的 screenPosToWorldPos 方案。
+     *
+     * 原理：正交投影中，屏幕偏移和世界偏移是线性对应的：
+     *   pixelsToBlocks = screenHeight / (2 × zoom) ← 正交投影线性映射
+     *   屏幕中心对应玩家位置
+     *   水平偏移 → 相机右方向的世界偏移
+     *   垂直偏移 → 相机前方向的世界偏移（经俯仰角修正）
+     *
+     * @param mouseX 鼠标物理像素 X（glfwGetCursorPos 或虚拟光标）
+     * @param mouseY 鼠标物理像素 Y
+     * @param screenWidth 窗口物理像素宽度
+     * @param screenHeight 窗口物理像素高度
+     * @param playerPos 玩家当前位置
+     * @return 世界地面 [worldX, worldZ]，null 表示参数无效
+     */
+    @Nullable
+    public static double[] screenPosToWorldPos(double mouseX, double mouseY,
+                                                int screenWidth, int screenHeight,
+                                                Vec3 playerPos) {
+        double zoom = OrthoviewClientEvent.getZoom();
+        if (zoom <= 0) return null;
+
+        // pixelsPerBlock = 每个世界方块对应多少屏幕像素
+        // ortho 矩阵 halfHeight = zoom → 覆盖 screenHeight 像素
+        double pixelsPerBlock = screenHeight / (2.0 * zoom);
+
+        // 屏幕偏移 → 相机空间偏移（blocks）
+        double camRightOffset = (mouseX - screenWidth / 2.0) / pixelsPerBlock;   // 相机右方向偏移
+        double camUpOffset = (screenHeight / 2.0 - mouseY) / pixelsPerBlock;     // 相机上方向偏移（屏幕Y反转）
+
+        // ===== 从已知参数推导相机 3D 轴（不需要缓存四元数） =====
+        // 相机 yaw = fixedYaw（进入鸟瞰时锁定）
+        // 相机 pitch = cameraLookPitch（由 onComputeCameraAngles look-at 算法实时缓存）
+        // 两者都是已知参数，不需要投影矩阵或四元数
+
+        // 相机 forward = 从相机指向玩家的方向
+        // 水平 yaw = fixedYaw (相机看向玩家)
+        // forward 水平分量 = -sin(fixedYaw), cos(fixedYaw)（从相机→玩家）
+        double yawRad = Math.toRadians(fixedYaw);
+
+        // 相机前方向（水平分量，从相机指向玩家）
+        // 注意：fixedYaw 是 Minecraft 的 yaw（实体面朝方向），但相机从后方看向玩家，
+        // 所以"相机→玩家"方向 = 反转 Minecraft look 方向 = (sin(yaw), -cos(yaw))
+        // 之前的 bug 用了 (-sin(yaw), cos(yaw)) = 玩家→相机方向，导致中心对称
+        double forwardX = Math.sin(yawRad);
+        double forwardZ = -Math.cos(yawRad);
+
+        // 相机右方向（水平分量，垂直于前方向）
+        // 与 forward 同理：实际相机 lookYaw = fixedYaw + 180°，
+        // 所以 right = (-cos(lookYaw), -sin(lookYaw)) = (cos(fixedYaw), sin(fixedYaw))
+        double rightX = Math.cos(yawRad);
+        double rightZ = Math.sin(yawRad);
+
+        // 俯仰角修正：正交投影鸟瞰视角下，地面距离在屏幕上被 sin(pitch) 压缩
+        // 反算时必须除以 sin(pitch) 还原真实地面距离（参考 Reign of Nether 的 z/sin(camRotY)）
+        // 例如 pitch=45°: sin=0.707，地面10格在屏幕上只占7.07格 → 反算: 7.07/0.707=10 ✓
+        // 之前的 bug 是乘以 sin(pitch)，反而进一步压缩 → 离中心越远偏移越大
+        double pitchRad = Math.toRadians(cameraLookPitch);
+
+        // 屏幕垂直偏移 → 地面前进偏移（除以 sin(pitch) 还原压缩）
+        double groundForwardDist = camUpOffset / Math.sin(pitchRad);
+
+        // 世界坐标 = 玩家位置 + 右方向偏移 + 前方向偏移
+        double worldX = playerPos.x + camRightOffset * rightX + groundForwardDist * forwardX;
+        double worldZ = playerPos.z + camRightOffset * rightZ + groundForwardDist * forwardZ;
+
+        return new double[]{worldX, worldZ};
     }
 }

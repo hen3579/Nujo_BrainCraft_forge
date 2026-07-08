@@ -3,6 +3,7 @@ package com.Hen3579.Nujomod;
 import com.Hen3579.Nujomod.Client.Events.BirdviewCursorOverlay;
 import com.Hen3579.Nujomod.Client.Events.ClientEventHandler;
 import com.Hen3579.Nujomod.Inits.*;
+import com.Hen3579.Nujomod.Network.BirdviewNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -70,6 +71,8 @@ public class NujoBraincraft
         // Some common setup code
         LOGGER.info("HELLO FROM COMMON SETUP");
 
+        // 注册网络通道（客户端→服务器鸟瞰状态同步）
+        event.enqueueWork(BirdviewNetwork::register);
     }
 
     // Add the example block item to the building blocks tab

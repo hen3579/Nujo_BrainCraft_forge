@@ -2,6 +2,8 @@ package com.Hen3579.Nujomod.Client.Events;
 
 import com.Hen3579.Nujomod.Client.gui.Menu.Screen.CustomMainMenuScreen;
 import com.Hen3579.Nujomod.Client.Utils.CameraAccess;
+import com.Hen3579.Nujomod.Network.BirdviewNetwork;
+import com.Hen3579.Nujomod.Network.BirdviewStatePacket;
 import com.Hen3579.Nujomod.NujoBraincraft;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
@@ -96,11 +98,15 @@ public class ClientEventHandler {
             if (newPerspective == 3 && prevPerspective != 3) {
                 BirdviewClientEvent.onEnterBirdseye(mc.player.getYRot());
                 setupBirdviewGlow(mc);
+                // 通知服务器：鸟瞰模式开启（激活飞行生物 Y 轴约束）
+                BirdviewNetwork.INSTANCE.sendToServer(new BirdviewStatePacket(true));
             }
 
             // 退出鸟瞰时：关闭发光描边
             if (prevPerspective == 3 && newPerspective != 3) {
                 clearBirdviewGlow(mc);
+                // 通知服务器：鸟瞰模式关闭（解除飞行生物 Y 轴约束）
+                BirdviewNetwork.INSTANCE.sendToServer(new BirdviewStatePacket(false));
             }
 
             // 退出鸟瞰时立即恢复光标为 DISABLED（第一人称状态），
@@ -279,47 +285,24 @@ public class ClientEventHandler {
 
     // ===== 点击移动 =====
 
-    /** 右键点击：用鼠标偏移+垂直下射线检测目标位置 */
+    /** 右键点击：用正交投影纯数学 screenPosToWorldPos + 垂直射线检测目标位置 */
     private static void handleClickToMove(Minecraft mc) {
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 camPos = camera.getPosition();
         Window window = mc.getWindow();
 
-        // 从临时光标位置读取（virtCursor + raw delta）
+        // 从虚拟光标读取位置
         double[] rayPos = getRaycastCursorPos(mc);
         if (rayPos == null) return;
         double mouseX = rayPos[0];
         double mouseY = rayPos[1];
 
-        // 屏幕中心点（物理像素坐标）
-        double centerX = window.getWidth() / 2.0;
-        double centerY = window.getHeight() / 2.0;
-
-        // 归一化鼠标偏移 [-1, 1]，用 half-height 做归一化以保持宽高比
-        double normDX = (mouseX - centerX) / centerY;
-        double normDY = -(mouseY - centerY) / centerY;  // 屏幕 Y 轴方向反转
-
-        // 相机朝向的水平分量（鸟瞰模式下由 look-at 固定）
-        float yaw = camera.getYRot();
-        double yawRad = Math.toRadians(yaw);
-
-        // 相机水平 forward / right 向量
-        Vec3 forward = new Vec3(-Math.sin(yawRad), 0, Math.cos(yawRad));
-        Vec3 right   = new Vec3(-Math.cos(yawRad), 0, -Math.sin(yawRad));
-
-        // 鸟瞰相机到玩家的水平距离（用于计算 worldScale）
-        double horizontalOffset = BirdviewClientEvent.BIRDSEYE_HEIGHT
-                / Math.tan(Math.toRadians(BirdviewClientEvent.BIRDSEYE_PITCH));
-
-        // 根据 FOV 将屏幕偏移映射为世界偏移，以玩家位置为原点
-        float fov = mc.options.fov().get().floatValue();
-        double fovScale = Math.tan(Math.toRadians(fov / 2.0));
-        double worldScale = horizontalOffset * fovScale;
-
-        // 鼠标偏移对应的世界坐标（以玩家位置为原点，确保屏幕中心对准玩家）
-        Vec3 playerPos = mc.player.position();
-        double worldX = playerPos.x + (forward.x * normDY + right.x * normDX) * worldScale;
-        double worldZ = playerPos.z + (forward.z * normDY + right.z * normDX) * worldScale;
+        // ===== 正交投影纯数学：屏幕坐标 → 世界地面 XZ =====
+        double[] worldXZ = BirdviewClientEvent.screenPosToWorldPos(
+                mouseX, mouseY, window.getWidth(), window.getHeight(), mc.player.position());
+        if (worldXZ == null) return;
+        double worldX = worldXZ[0];
+        double worldZ = worldXZ[1];
 
         // === 垂直向下射线检测方块 ===
         Vec3 from = new Vec3(worldX, camPos.y + 5, worldZ);
@@ -388,47 +371,24 @@ public class ClientEventHandler {
 
     // ===== 悬停方块更新 =====
 
-    /** 每帧从相机位置垂直向下射线 + 鼠标屏幕偏移，判断光标指向的方块/生物 */
+    /** 每帧用正交投影纯数学 screenPosToWorldPos + 垂直射线，判断光标指向的方块/生物 */
     private static void updateHoveredBlock(Minecraft mc) {
         Camera camera = mc.gameRenderer.getMainCamera();
         Vec3 camPos = camera.getPosition();
         Window window = mc.getWindow();
 
-        // 直接从 virtCursor 读取（已在 handleEndPhase 中更新，是最新位置）
+        // 直接从 virtCursor 读取（已在 overlay 中更新，是最新位置）
         double[] virt = BirdviewClientEvent.getVirtCursorPos();
         if (virt == null) return;
         double mouseX = virt[0];
         double mouseY = virt[1];
 
-        // 屏幕中心点（物理像素坐标）
-        double centerX = window.getWidth() / 2.0;
-        double centerY = window.getHeight() / 2.0;
-
-        // 归一化鼠标偏移 [-1, 1]，用 half-height 做归一化以保持宽高比
-        double normDX = (mouseX - centerX) / centerY;
-        double normDY = -(mouseY - centerY) / centerY;  // 屏幕 Y 轴方向反转
-
-        // 相机朝向的水平分量（鸟瞰模式下由 look-at 固定）
-        float yaw = camera.getYRot();
-        double yawRad = Math.toRadians(yaw);
-
-        // 相机水平 forward / right 向量
-        Vec3 forward = new Vec3(-Math.sin(yawRad), 0, Math.cos(yawRad));
-        Vec3 right   = new Vec3(-Math.cos(yawRad), 0, -Math.sin(yawRad));
-
-        // 鸟瞰相机到玩家的水平距离（用于计算 worldScale）
-        double horizontalOffset = BirdviewClientEvent.BIRDSEYE_HEIGHT
-                / Math.tan(Math.toRadians(BirdviewClientEvent.BIRDSEYE_PITCH));
-
-        // 根据 FOV 将屏幕偏移映射为世界偏移，以玩家位置为原点
-        float fov = mc.options.fov().get().floatValue();
-        double fovScale = Math.tan(Math.toRadians(fov / 2.0));
-        double worldScale = horizontalOffset * fovScale;
-
-        // 鼠标偏移对应的世界坐标（以玩家位置为原点，确保屏幕中心对准玩家）
-        Vec3 playerPos = mc.player.position();
-        double worldX = playerPos.x + (forward.x * normDY + right.x * normDX) * worldScale;
-        double worldZ = playerPos.z + (forward.z * normDY + right.z * normDX) * worldScale;
+        // ===== 正交投影纯数学：屏幕坐标 → 世界地面 XZ（参考 Reign of Nether） =====
+        double[] worldXZ = BirdviewClientEvent.screenPosToWorldPos(
+                mouseX, mouseY, window.getWidth(), window.getHeight(), mc.player.position());
+        if (worldXZ == null) return;
+        double worldX = worldXZ[0];
+        double worldZ = worldXZ[1];
 
         // === 垂直向下射线检测方块 ===
         Vec3 from = new Vec3(worldX, camPos.y + 5, worldZ);
@@ -458,6 +418,60 @@ public class ClientEventHandler {
                     // 实体包围盒包含了光标命中点 → 悬停在该实体上
                     bestHit = new EntityHitResult(entity, hitPos);
                     break;
+                }
+            }
+        }
+
+        // === 屏幕空间拾取：空中/滞空实体检测 ===
+        // 对于不在地面附近的飞行生物（如 Phantom、Allay、Ghast），
+        // 用投影矩阵做屏幕空间命中判定，支持左键点击空中怪物直接攻击
+        {
+            Vec3 camPosScreen = BirdviewClientEvent.getCachedCameraPos();
+            if (camPosScreen != null) {
+                int sw = window.getWidth();
+                int sh = window.getHeight();
+                double bestScreenDist = 20.0; // 20像素命中半径
+                Entity bestAirEntity = null;
+                double bestAirDepth = Double.MAX_VALUE;
+
+                // 在相机周围搜索所有活体（排除玩家自己）
+                AABB searchBox = new AABB(
+                    camPosScreen.x - 48, camPosScreen.y - 48, camPosScreen.z - 48,
+                    camPosScreen.x + 48, camPosScreen.y + 48, camPosScreen.z + 48
+                );
+                for (Entity entity : mc.level.getEntities(mc.player, searchBox,
+                        e -> e instanceof LivingEntity && e.isAlive())) {
+
+                    // 投影实体中心（偏上 60% 高度，更好点中）到屏幕
+                    Vec3 entityCenter = new Vec3(
+                        entity.getX(),
+                        entity.getY() + entity.getBbHeight() * 0.6,
+                        entity.getZ()
+                    );
+                    double[] screen = BirdviewClientEvent.worldToScreen(entityCenter, sw, sh);
+                    if (screen == null) continue; // 在屏幕外或投影失败
+
+                    double dx = screen[0] - mouseX;
+                    double dy = screen[1] - mouseY;
+                    double dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < bestScreenDist) {
+                        double depth = entity.distanceToSqr(camPosScreen);
+                        // 屏幕距离明显更近(>2px)，或距离接近时选深度更近的
+                        if (bestAirEntity == null
+                            || dist < bestScreenDist - 2.0
+                            || (Math.abs(dist - bestScreenDist) < 2.0 && depth < bestAirDepth)) {
+                            bestScreenDist = dist;
+                            bestAirDepth = depth;
+                            bestAirEntity = entity;
+                        }
+                    }
+                }
+
+                if (bestAirEntity != null) {
+                    // 空中实体命中 → 覆盖之前的 hitResult
+                    // 无论之前是方块命中还是地面实体命中，空中实体优先
+                    bestHit = new EntityHitResult(bestAirEntity, bestAirEntity.position());
                 }
             }
         }
@@ -795,6 +809,8 @@ public class ClientEventHandler {
 
         // 保存 look-at yaw 供相机对齐 WASD 使用
         BirdviewClientEvent.setCameraLookYaw(lookYaw);
+        // 保存 look-at pitch 供 screenPosToWorldPos 精确反算使用
+        BirdviewClientEvent.setCameraLookPitch(lookPitch);
 
         event.setPitch(lookPitch);
         event.setYaw(lookYaw);

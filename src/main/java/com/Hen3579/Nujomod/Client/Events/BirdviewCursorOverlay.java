@@ -7,13 +7,15 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.client.gui.overlay.ForgeGui;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
+import net.minecraft.world.phys.HitResult;
 import org.lwjgl.glfw.GLFW;
 
 /**
  * 鸟瞰模式 2D 叠层光标。
- * 在渲染帧（60 FPS）中更新虚拟光标位置，使用自己的 lastMouseX/lastMouseY
- * 跟踪帧间真实鼠标 delta（不受 turnPlayer 重置影响），实现平滑大范围移动。
- * 参考 Reign of Nether 的 RTS 光标方案。
+ * 参考 Reign of Nether 的 RTS 光标方案：
+ * - GLFW_CURSOR_NORMAL：鼠标自由可见，直接在屏幕上移动
+ * - 光标位置 = glfwGetCursorPos 直接读取（不再用虚拟光标追踪 delta）
+ * - 光标纹理画在鼠标位置，热点与地面标记中心精确重合
  */
 public class BirdviewCursorOverlay implements IGuiOverlay {
     public static final ResourceLocation ID = new ResourceLocation(NujoBraincraft.MODID, "birdview_cursor");
@@ -21,12 +23,20 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
     private static final int CURSOR_SIZE = 24;
     private static final int LINE_WIDTH = 2;
 
+    // 光标纹理（32x32 自定义箭头 / 16x16 自定义攻击图标）
+    private static final ResourceLocation CURSOR_NORMAL      = new ResourceLocation(NujoBraincraft.MODID, "textures/gui/mouse/normal.png");
+    private static final ResourceLocation CURSOR_CLICK       = new ResourceLocation(NujoBraincraft.MODID, "textures/gui/mouse/click.png");
+    private static final ResourceLocation CURSOR_ATTACK      = new ResourceLocation(NujoBraincraft.MODID, "textures/gui/mouse/attack_hanging.png");
+    private static final ResourceLocation CURSOR_ATTACK_CLICK = new ResourceLocation(NujoBraincraft.MODID, "textures/gui/mouse/attack_click.png");
+
+    // 光标显示参数：光标热点 = 地面标记中心 = 同一个屏幕坐标
+    // normal/click 纹理是箭头风格（热点在左上角），因此零偏移即可让热点和地面标记中心重合
+    private static final int CURSOR_DISPLAY_SIZE = 16;  // 显示尺寸（GUI像素）
+    private static final int CURSOR_OFFSET_X = 0;         // 水平无偏移
+    private static final int CURSOR_OFFSET_Y = 0;         // 垂直无偏移
+
     // 跟踪上一帧的鸟瞰状态，用于在退出时还原光标
     private static boolean wasActive = false;
-
-    // 自跟踪鼠标位置，用于计算帧间真实 delta（不受 turnPlayer 重置影响）
-    private static double lastMouseX = 0;
-    private static double lastMouseY = 0;
 
     @Override
     public void render(ForgeGui gui, GuiGraphics guiGraphics, float partialTick, int screenWidth, int screenHeight) {
@@ -46,31 +56,50 @@ public class BirdviewCursorOverlay implements IGuiOverlay {
             return;
         }
 
-        // 进入鸟瞰 → GLFW_CURSOR_DISABLED + 重置虚拟光标 + 初始化 lastMouse
+        // 进入鸟瞰 → GLFW_CURSOR_HIDDEN（隐藏系统光标但鼠标自由移动）
+        // Reign of Nether 风格：鼠标自由移动到屏幕任何位置，自定义纹理替代系统光标
         if (!wasActive) {
             wasActive = true;
-            GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_DISABLED);
-            double physCenterX = window.getWidth() / 2.0;
-            double physCenterY = window.getHeight() / 2.0;
-            BirdviewClientEvent.resetVirtCursorToCenter(physCenterX, physCenterY);
-            // 初始化跟踪位置为当前鼠标位置（首次 delta = 0）
-            lastMouseX = mc.mouseHandler.xpos();
-            lastMouseY = mc.mouseHandler.ypos();
+            GLFW.glfwSetInputMode(window.getWindow(), GLFW.GLFW_CURSOR, GLFW.GLFW_CURSOR_HIDDEN);
         }
 
-        // ===== 每帧用自跟踪 delta 更新虚拟光标（60 FPS 平滑） =====
-        double currentX = mc.mouseHandler.xpos();
-        double currentY = mc.mouseHandler.ypos();
-        double dx = currentX - lastMouseX;
-        double dy = currentY - lastMouseY;
-        lastMouseX = currentX;
-        lastMouseY = currentY;
+        // ===== 直接读取鼠标位置（不再用虚拟光标 delta 追踪） =====
+        double mouseX = mc.mouseHandler.xpos();
+        double mouseY = mc.mouseHandler.ypos();
 
-        double[] virt = BirdviewClientEvent.getVirtCursorPos();
-        if (virt != null) {
-            double newX = Math.max(0, Math.min(window.getWidth(), virt[0] + dx));
-            double newY = Math.max(0, Math.min(window.getHeight(), virt[1] + dy));
-            BirdviewClientEvent.setVirtCursorPos(newX, newY);
+        // 把物理像素坐标存为虚拟光标（供 screenPosToWorldPos / updateHoveredBlock 使用）
+        BirdviewClientEvent.setVirtCursorPos(mouseX, mouseY);
+
+        // ===== 光标纹理渲染 =====
+        // 正交投影下，光标位置和地面标记天然对齐（线性映射，无透视畸变）
+        // 光标热点 = 地面标记中心 = 同一个屏幕坐标
+        double guiScale = window.getGuiScale();
+        int cursorX = (int) (mouseX / guiScale) + CURSOR_OFFSET_X;
+        int cursorY = (int) (mouseY / guiScale) + CURSOR_OFFSET_Y;
+
+        HitResult hoverHit = BirdviewClientEvent.getHoveredHitResult();
+        boolean hoveringAttackable = hoverHit != null && hoverHit.getType() == HitResult.Type.ENTITY;
+
+        if (hoveringAttackable && mc.options.keyAttack.isDown()) {
+            // 悬停可攻击实体 + 按住攻击键 → attack_click
+            guiGraphics.blit(CURSOR_ATTACK_CLICK, cursorX, cursorY,
+                    CURSOR_DISPLAY_SIZE, CURSOR_DISPLAY_SIZE,
+                    0, 0, 16, 16, 16, 16);
+        } else if (hoveringAttackable) {
+            // 悬停可攻击实体（未按攻击键） → attack_hanging
+            guiGraphics.blit(CURSOR_ATTACK, cursorX, cursorY,
+                    CURSOR_DISPLAY_SIZE, CURSOR_DISPLAY_SIZE,
+                    0, 0, 16, 16, 16, 16);
+        } else if (mc.options.keyAttack.isDown()) {
+            // 左键按下但未悬停实体 → 原点击态光标
+            guiGraphics.blit(CURSOR_CLICK, cursorX, cursorY,
+                    CURSOR_DISPLAY_SIZE, CURSOR_DISPLAY_SIZE,
+                    0, 0, 32, 32, 32, 32);
+        } else {
+            // 默认态光标
+            guiGraphics.blit(CURSOR_NORMAL, cursorX, cursorY,
+                    CURSOR_DISPLAY_SIZE, CURSOR_DISPLAY_SIZE,
+                    0, 0, 32, 32, 32, 32);
         }
 
         if (mc.player == null) return;
