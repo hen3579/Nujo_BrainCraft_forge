@@ -299,6 +299,61 @@ public class BirdviewClientEvent {
         return new double[]{screenX, screenY};
     }
 
+    // ===== 纯数学世界→屏幕投影（正交投影逆运算，不依赖缓存） =====
+
+    /**
+     * 纯数学世界坐标→屏幕坐标投影（正交投影）。
+     * 这是 screenPosToWorldPos 的逆运算，不依赖任何缓存的渲染矩阵或相机数据。
+     * 仅使用已知参数：zoom、fixedYaw、cameraLookPitch、玩家位置。
+     *
+     * 原理：正交投影中，世界→屏幕是线性映射，无需透视除法。
+     * 相机右轴和上轴可由 fixedYaw + cameraLookPitch 纯三角函数推导，
+     * 与 screenPosToWorldPos 使用完全相同的坐标轴定义。
+     *
+     * @param worldPos 要投影的世界坐标
+     * @param screenWidth 窗口物理像素宽度
+     * @param screenHeight 窗口物理像素高度
+     * @param playerPos 玩家当前位置（屏幕中心参考点）
+     * @return [screenX, screenY] 屏幕坐标，或 null（参数无效）
+     */
+    @Nullable
+    public static double[] worldToScreenPureMath(Vec3 worldPos, int screenWidth, int screenHeight, Vec3 playerPos) {
+        double zoom = OrthoviewClientEvent.getZoom();
+        if (zoom <= 0) return null;
+
+        // 相对玩家位置的偏移
+        double relX = worldPos.x - playerPos.x;
+        double relY = worldPos.y - playerPos.y;
+        double relZ = worldPos.z - playerPos.z;
+
+        // 相机轴（与 screenPosToWorldPos 使用完全相同的定义）
+        double yawRad = Math.toRadians(fixedYaw);
+        double pitchRad = Math.toRadians(cameraLookPitch);
+
+        // 相机右方向（水平）：right = (cos(yaw), 0, sin(yaw))
+        double rightX = Math.cos(yawRad);
+        double rightZ = Math.sin(yawRad);
+
+        // 相机上方向（3D）：up = right × forward_3d
+        // forward_3d = (sin(yaw)*cos(pitch), -sin(pitch), -cos(yaw)*cos(pitch))
+        // up = (sin(yaw)*sin(pitch), cos(pitch), -cos(yaw)*sin(pitch))
+        double upX = Math.sin(yawRad) * Math.sin(pitchRad);
+        double upY = Math.cos(pitchRad);
+        double upZ = -Math.cos(yawRad) * Math.sin(pitchRad);
+
+        // 投影到相机右轴和上轴
+        double camRight = relX * rightX + relZ * rightZ;
+        double camUp = relX * upX + relY * upY + relZ * upZ;
+
+        // 正交投影：blocks → pixels（线性映射，与 screenPosToWorldPos 完全对称）
+        double pixelsPerBlock = screenHeight / (2.0 * zoom);
+
+        double screenX = screenWidth / 2.0 + camRight * pixelsPerBlock;
+        double screenY = screenHeight / 2.0 - camUp * pixelsPerBlock;
+
+        return new double[]{screenX, screenY};
+    }
+
     // ===== 正交投影纯数学反算：屏幕坐标 → 世界坐标（参考 Reign of Nether） =====
 
     /**

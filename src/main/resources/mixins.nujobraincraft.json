@@ -8,7 +8,10 @@
     "MenuMusicMixin",
     "MoveControlAccessor",
     "FlyingMobMoveMixin",
-    "MobServerAiStepMixin"
+    "MobServerAiStepMixin",
+    "DragonMixin",
+    "DragonSpikeMixin",
+    "EndDragonFightMixin"
   ],
   "client": [
     "CameraMixin",

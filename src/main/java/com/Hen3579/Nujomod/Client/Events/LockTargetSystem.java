@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.animal.IronGolem;
@@ -93,7 +94,9 @@ public class LockTargetSystem {
         Entity nearest = findNearestHostile(mc.player);
         if (nearest != null) {
             lockToTarget(nearest);
-            startMeleeChase(mc, nearest);
+            if (nearest instanceof LivingEntity living) {
+                startMeleeChase(mc, living);
+            }
             mc.player.displayClientMessage(
                     net.minecraft.network.chat.Component.literal(
                             "§b[锁定] §f已锁定 §e" + nearest.getDisplayName().getString()
@@ -132,7 +135,9 @@ public class LockTargetSystem {
         if (currentIdx < 0) {
             // 当前目标已不在列表中（可能已死亡）→ 锁定最近的
             lockToTarget(sorted.get(0));
-            startMeleeChase(mc, sorted.get(0));
+            if (sorted.get(0) instanceof LivingEntity living0) {
+                startMeleeChase(mc, living0);
+            }
             mc.player.displayClientMessage(
                     net.minecraft.network.chat.Component.literal(
                             "§b[切换] §f锁定 §e" + sorted.get(0).getDisplayName().getString()
@@ -156,7 +161,9 @@ public class LockTargetSystem {
         Entity next = sorted.get(nextIdx);
         stopChasing(); // 先停止旧的追杀
         lockToTarget(next);
-        startMeleeChase(mc, next);
+        if (next instanceof LivingEntity livingNext) {
+            startMeleeChase(mc, livingNext);
+        }
         mc.player.displayClientMessage(
                 net.minecraft.network.chat.Component.literal(
                         "§b[切换] §f切换到 §e" + next.getDisplayName().getString()
@@ -193,6 +200,7 @@ public class LockTargetSystem {
 
     private static final Predicate<Entity> HOSTILE_FILTER = entity -> {
         if (!entity.isAlive() || entity.isRemoved()) return false;
+        if (entity instanceof EndCrystal) return true;
         if (entity instanceof EnderDragon || entity instanceof WitherBoss) return true;
         if (entity instanceof Enemy) return true;
         if (entity instanceof IronGolem golem) return golem.getTarget() != null;
@@ -285,7 +293,7 @@ public class LockTargetSystem {
 
     /** 当前远程攻击的目标（可能被多个子系统引用） */
     @Nullable
-    private static LivingEntity rangedTarget = null;
+    private static Entity rangedTarget = null;
 
     /** 弓蓄力已过刻数 */
     private static int bowChargeTicks = 0;
@@ -438,7 +446,7 @@ public class LockTargetSystem {
 
     /** 获取当前远程攻击目标 */
     @Nullable
-    public static LivingEntity getRangedTarget() {
+    public static Entity getRangedTarget() {
         return rangedTarget;
     }
 
@@ -478,17 +486,17 @@ public class LockTargetSystem {
         if (hoverHit == null || hoverHit.getType() != HitResult.Type.ENTITY) return false;
 
         Entity target = ((EntityHitResult) hoverHit).getEntity();
-        if (!(target instanceof LivingEntity living) || !living.isAlive()) return false;
+        if (!target.isAlive()) return false;
 
         ItemStack heldItem = mc.player.getMainHandItem();
 
         // 远程武器 → 远程攻击
         if (isRangedWeapon(heldItem)) {
-            return tryRangedAttack(mc, living, heldItem);
+            return tryRangedAttack(mc, target, heldItem);
         }
 
         // 近战武器/空手 → 近战攻击
-        return tryMeleeAttack(mc, living);
+        return tryMeleeAttack(mc, target);
     }
 
     // ===== 近战攻击 =====
@@ -497,18 +505,19 @@ public class LockTargetSystem {
      * 左键近战攻击悬停的生物。
      * 如果目标是敌对生物，自动锁定并开始追杀。
      */
-    private static boolean tryMeleeAttack(Minecraft mc, LivingEntity target) {
+    private static boolean tryMeleeAttack(Minecraft mc, Entity target) {
         if (globalRangedCooldownTicks > 0) return false;
 
         Player player = mc.player;
 
-        // 如果目标未锁定且为敌对生物→自动锁定并追杀
-        if (!isLocked() && HOSTILE_FILTER.test(target)) {
-            lockToTarget(target);
-            startMeleeChase(mc, target);
-        } else if (getLockedTarget() == target && !isChasing) {
-            // 目标已经是锁定目标但还没开始追杀 → 开始追杀
-            startMeleeChase(mc, target);
+        // LivingEntity: 敌对生物自动锁定并追杀
+        if (target instanceof LivingEntity living) {
+            if (!isLocked() && HOSTILE_FILTER.test(living)) {
+                lockToTarget(target);
+                startMeleeChase(mc, living);
+            } else if (getLockedTarget() == target && !isChasing) {
+                startMeleeChase(mc, living);
+            }
         }
 
         // 让玩家面向目标
@@ -518,7 +527,7 @@ public class LockTargetSystem {
         player.yRotO = targetYaw;
         player.setYHeadRot(targetYaw);
 
-        // 触发玩家攻击动作
+        // 触发玩家攻击动作（对任何 Entity 有效，包括 EndCrystal）
         mc.gameMode.attack(player, target);
         player.swing(InteractionHand.MAIN_HAND);
 
@@ -531,7 +540,7 @@ public class LockTargetSystem {
     /**
      * 尝试对指定目标发起远程攻击。
      */
-    private static boolean tryRangedAttack(Minecraft mc, LivingEntity target, ItemStack heldItem) {
+    private static boolean tryRangedAttack(Minecraft mc, Entity target, ItemStack heldItem) {
         // 冷却检测
         if (globalRangedCooldownTicks > 0) return false;
         if (rangedState != RangedState.IDLE) return false;
@@ -588,7 +597,7 @@ public class LockTargetSystem {
      * 单机：直接操控 ServerPlayer + ServerLevel 生成精确箭矢。
      * 联机 fallback：强制上膛客户端 → 发 useItem 包。
      */
-    private static void fireCrossbowOnServer(Minecraft mc, Player player, LivingEntity target,
+    private static void fireCrossbowOnServer(Minecraft mc, Player player, Entity target,
                                                ItemStack heldItem, float projectileSpeed) {
         MinecraftServer server = mc.getSingleplayerServer();
 
@@ -678,7 +687,7 @@ public class LockTargetSystem {
      * 单机：创建投掷三叉戟并设精确弹道。
      * 联机 fallback：直接发 useItem 包。
      */
-    private static void fireTridentOnServer(Minecraft mc, Player player, LivingEntity target,
+    private static void fireTridentOnServer(Minecraft mc, Player player, Entity target,
                                              ItemStack heldItem, float projectileSpeed) {
         MinecraftServer server = mc.getSingleplayerServer();
 
@@ -751,7 +760,7 @@ public class LockTargetSystem {
      * 单机：直接创建弹射物实体到服务端。
      * 联机 fallback：发 useItem 包。
      */
-    private static void fireThrowableOnServer(Minecraft mc, Player player, LivingEntity target,
+    private static void fireThrowableOnServer(Minecraft mc, Player player, Entity target,
                                                ItemStack heldItem, float projectileSpeed) {
         MinecraftServer server = mc.getSingleplayerServer();
 
@@ -947,41 +956,51 @@ public class LockTargetSystem {
         ServerPlayer serverPlayer = server.getPlayerList().getPlayer(mc.player.getUUID());
         if (serverPlayer == null) return;
 
-        // 1. 重新计算精确弹道角度（此时目标可能已移动）
-        ItemStack heldItem = serverPlayer.getMainHandItem();
-        float projectileSpeed = getProjectileSpeed(heldItem);
-        float[] aim = calculateBallisticAim(serverPlayer, rangedTarget, projectileSpeed);
+        // 在服务端线程执行，避免跨线程访问 LegacyRandomSource 导致崩溃
+        // 关键：必须捕获 rangedTarget 到局部变量，因为调用方在 fireBowOnServer 返回后
+        // 会立刻把 rangedTarget 置为 null，而 lambda 要等到下一个 server tick 才执行
+        final ServerPlayer sp = serverPlayer;
+        final Entity target = rangedTarget;
+        server.execute(() -> {
+            // 0. 安全检查（目标可能在排队期间死亡）
+            if (!target.isAlive()) return;
 
-        // 2. 同步角度到服务端玩家
-        serverPlayer.setYRot(aim[0]);
-        serverPlayer.yRotO = aim[0];
-        serverPlayer.setXRot(aim[1]);
-        serverPlayer.xRotO = aim[1];
-        serverPlayer.setYHeadRot(aim[0]);
-        serverPlayer.yBodyRot = aim[0];
+            // 1. 重新计算精确弹道角度（此时目标可能已移动）
+            ItemStack heldItem = sp.getMainHandItem();
+            float projectileSpeed = getProjectileSpeed(heldItem);
+            float[] aim = calculateBallisticAim(sp, target, projectileSpeed);
 
-        // 3. 让服务端创建箭矢（获得所有附魔/属性效果）
-        serverPlayer.startUsingItem(InteractionHand.MAIN_HAND);
-        try {
-            java.lang.reflect.Field remainingField = net.minecraft.world.entity.LivingEntity.class
-                    .getDeclaredField("useItemRemaining");
-            remainingField.setAccessible(true);
-            remainingField.setInt(serverPlayer, 0);
-        } catch (Exception e) {
-            serverPlayer.stopUsingItem();
-            serverPlayer.startUsingItem(InteractionHand.MAIN_HAND);
-        }
-        serverPlayer.releaseUsingItem();
+            // 2. 同步角度到服务端玩家
+            sp.setYRot(aim[0]);
+            sp.yRotO = aim[0];
+            sp.setXRot(aim[1]);
+            sp.xRotO = aim[1];
+            sp.setYHeadRot(aim[0]);
+            sp.setYBodyRot(aim[0]);
 
-        // 4. 找到刚生成的箭矢，用精确弹道覆盖其速度 → 100% 命中
-        correctProjectileToTarget(serverPlayer, rangedTarget, projectileSpeed);
+            // 3. 让服务端创建箭矢（获得所有附魔/属性效果）
+            sp.startUsingItem(InteractionHand.MAIN_HAND);
+            try {
+                java.lang.reflect.Field remainingField = net.minecraft.world.entity.LivingEntity.class
+                        .getDeclaredField("useItemRemaining");
+                remainingField.setAccessible(true);
+                remainingField.setInt(sp, 0);
+            } catch (Exception e) {
+                sp.stopUsingItem();
+                sp.startUsingItem(InteractionHand.MAIN_HAND);
+            }
+            sp.releaseUsingItem();
+
+            // 4. 找到刚生成的箭矢，用精确弹道覆盖其速度 → 100% 命中
+            correctProjectileToTarget(sp, target, projectileSpeed);
+        });
     }
 
     /**
      * 找到服务端刚刚生成的箭矢，覆盖其速度为精确弹道向量。
      * 消除了 vanilla BowItem 的 shootFromRotation 中的随机散布。
      */
-    private static void correctProjectileToTarget(ServerPlayer player, LivingEntity target, float speed) {
+    private static void correctProjectileToTarget(ServerPlayer player, Entity target, float speed) {
         Vec3 playerEye = player.getEyePosition(1.0f);
 
         // 找刚生成（tickCount ≤ 1）且归属于自己的弹射物，逐一修正

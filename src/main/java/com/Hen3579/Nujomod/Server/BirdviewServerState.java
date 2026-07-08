@@ -88,6 +88,29 @@ public class BirdviewServerState {
         return nearest;
     }
 
+    /**
+     * 查找同一维度中任意鸟瞰模式玩家（无距离限制）。
+     * 用于末影龙等 Boss 级生物——只要同一维度有鸟瞰玩家就生效，
+     * 不受 64 格范围限制（龙在 Y=68，玩家在地面 Y=0 时距离已超 64 格）。
+     *
+     * @param level 查找的维度
+     * @return 任意一个鸟瞰玩家，或 null
+     */
+    public static ServerPlayer getAnyBirdviewPlayerInLevel(ServerLevel level) {
+        if (level == null || level.isClientSide()) return null;
+        if (birdviewPlayers.isEmpty()) return null;
+
+        MinecraftServer server = level.getServer();
+        if (server == null) return null;
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!birdviewPlayers.contains(player.getUUID())) continue;
+            if (player.level() != level) continue;
+            return player; // 找到第一个即返回
+        }
+        return null;
+    }
+
     // ===== 俯冲冷却管理 =====
 
     /** 俯冲持续时间（tick）：2 秒内允许低于 yMin 俯冲攻击 */

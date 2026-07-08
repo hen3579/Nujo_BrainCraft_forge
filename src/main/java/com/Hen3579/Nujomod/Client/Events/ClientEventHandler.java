@@ -29,6 +29,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -127,8 +128,11 @@ public class ClientEventHandler {
             );
         }
 
-        // 鸟瞰模式下：消费右键点击移动（阻止原版放置方块）
+        // 鸟瞰模式下：右键 → 解除Tab锁敌 + 点击移动（二合一）
         if (BirdviewClientEvent.isBirdseyeActive() && options.keyUse.consumeClick()) {
+            if (LockTargetSystem.isLocked()) {
+                LockTargetSystem.unlockTarget();
+            }
             handleClickToMove(mc);
         }
 
@@ -422,57 +426,68 @@ public class ClientEventHandler {
             }
         }
 
-        // === 屏幕空间拾取：空中/滞空实体检测 ===
+        // === 屏幕空间拾取：空中/滞空实体检测（纯数学投影，不依赖缓存） ===
         // 对于不在地面附近的飞行生物（如 Phantom、Allay、Ghast），
-        // 用投影矩阵做屏幕空间命中判定，支持左键点击空中怪物直接攻击
+        // 用纯数学投影做屏幕空间命中判定，支持左键点击空中怪物直接攻击
+        // 不依赖缓存的渲染矩阵/相机数据，首帧即可使用
         {
-            Vec3 camPosScreen = BirdviewClientEvent.getCachedCameraPos();
-            if (camPosScreen != null) {
-                int sw = window.getWidth();
-                int sh = window.getHeight();
-                double bestScreenDist = 20.0; // 20像素命中半径
-                Entity bestAirEntity = null;
-                double bestAirDepth = Double.MAX_VALUE;
+            Vec3 playerPos = mc.player.position();
+            int sw = window.getWidth();
+            int sh = window.getHeight();
+            double zoom = OrthoviewClientEvent.getZoom();
+            if (zoom <= 0) zoom = OrthoviewClientEvent.ZOOM_DEFAULT;
+            double pixelsPerBlock = sh / (2.0 * zoom);
 
-                // 在相机周围搜索所有活体（排除玩家自己）
-                AABB searchBox = new AABB(
-                    camPosScreen.x - 48, camPosScreen.y - 48, camPosScreen.z - 48,
-                    camPosScreen.x + 48, camPosScreen.y + 48, camPosScreen.z + 48
+            double bestScreenDist = Double.MAX_VALUE; // 最佳命中实体的屏幕距离
+            Entity bestAirEntity = null;
+            double bestAirDepth = Double.MAX_VALUE;
+
+            // 在玩家周围搜索所有活体（排除玩家自己）
+            AABB searchBox = new AABB(
+                playerPos.x - 48, playerPos.y - 48, playerPos.z - 48,
+                playerPos.x + 48, playerPos.y + 48, playerPos.z + 48
+            );
+            for (Entity entity : mc.level.getEntities(mc.player, searchBox,
+                    e -> (e instanceof LivingEntity || e instanceof EndCrystal) && e.isAlive())) {
+
+                // 投影实体中心（偏上 60% 高度，更好点中）到屏幕
+                Vec3 entityCenter = new Vec3(
+                    entity.getX(),
+                    entity.getY() + entity.getBbHeight() * 0.6,
+                    entity.getZ()
                 );
-                for (Entity entity : mc.level.getEntities(mc.player, searchBox,
-                        e -> e instanceof LivingEntity && e.isAlive())) {
+                double[] screen = BirdviewClientEvent.worldToScreenPureMath(entityCenter, sw, sh, playerPos);
+                if (screen == null) continue; // 投影失败
 
-                    // 投影实体中心（偏上 60% 高度，更好点中）到屏幕
-                    Vec3 entityCenter = new Vec3(
-                        entity.getX(),
-                        entity.getY() + entity.getBbHeight() * 0.6,
-                        entity.getZ()
-                    );
-                    double[] screen = BirdviewClientEvent.worldToScreen(entityCenter, sw, sh);
-                    if (screen == null) continue; // 在屏幕外或投影失败
+                // 超出屏幕范围（留 50px 余量）则跳过
+                if (screen[0] < -50 || screen[0] > sw + 50 || screen[1] < -50 || screen[1] > sh + 50) continue;
 
-                    double dx = screen[0] - mouseX;
-                    double dy = screen[1] - mouseY;
-                    double dist = Math.sqrt(dx * dx + dy * dy);
+                double dx = screen[0] - mouseX;
+                double dy = screen[1] - mouseY;
+                double dist = Math.sqrt(dx * dx + dy * dy);
 
-                    if (dist < bestScreenDist) {
-                        double depth = entity.distanceToSqr(camPosScreen);
-                        // 屏幕距离明显更近(>2px)，或距离接近时选深度更近的
-                        if (bestAirEntity == null
-                            || dist < bestScreenDist - 2.0
-                            || (Math.abs(dist - bestScreenDist) < 2.0 && depth < bestAirDepth)) {
-                            bestScreenDist = dist;
-                            bestAirDepth = depth;
-                            bestAirEntity = entity;
-                        }
+                // 动态命中半径：实体在屏幕上越大，命中半径越大
+                // 小实体（僵尸/幻翼）→ 固定 20px；大实体（恶魂/末影龙）→ 按视觉大小缩放
+                double entityScreenRadius = entity.getBbWidth() * pixelsPerBlock * 0.4;
+                double hitRadius = Math.max(20.0, entityScreenRadius);
+
+                if (dist < hitRadius) {
+                    double depth = entity.distanceToSqr(playerPos);
+                    // 屏幕距离明显更近(>2px)，或距离接近时选深度更近的
+                    if (bestAirEntity == null
+                        || dist < bestScreenDist - 2.0
+                        || (Math.abs(dist - bestScreenDist) < 2.0 && depth < bestAirDepth)) {
+                        bestScreenDist = dist;
+                        bestAirDepth = depth;
+                        bestAirEntity = entity;
                     }
                 }
+            }
 
-                if (bestAirEntity != null) {
-                    // 空中实体命中 → 覆盖之前的 hitResult
-                    // 无论之前是方块命中还是地面实体命中，空中实体优先
-                    bestHit = new EntityHitResult(bestAirEntity, bestAirEntity.position());
-                }
+            if (bestAirEntity != null) {
+                // 空中实体命中 → 覆盖之前的 hitResult
+                // 无论之前是方块命中还是地面实体命中，空中实体优先
+                bestHit = new EntityHitResult(bestAirEntity, bestAirEntity.position());
             }
         }
 
@@ -675,7 +690,7 @@ public class ClientEventHandler {
 
         // ===== 渲染远程攻击目标指示 =====
         if (LockTargetSystem.isRanging()) {
-            LivingEntity rangedTarget = LockTargetSystem.getRangedTarget();
+            Entity rangedTarget = LockTargetSystem.getRangedTarget();
             if (rangedTarget != null && rangedTarget.isAlive()) {
                 AABB targetBB = rangedTarget.getBoundingBox();
 
