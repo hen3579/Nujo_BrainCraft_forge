@@ -185,5 +185,8 @@
   "_comment_quest_messages": "=== Quest Messages ===",
   "story.nujobraincraft.quest.ch2_to_ch3.msg": "§bBrian disperses into starlight. Helen guards the island. Head south to explore the flower sea and city...",
   "story.nujobraincraft.quest.ch3_to_ch4.msg": "§cThe truth is known. Time to declare war on Darcy!",
-  "story.nujobraincraft.quest.ch4_defeat_darcy.msg": "§aDarcy is defeated, his regime collapses. False peace descends..."
+  "story.nujobraincraft.quest.ch4_defeat_darcy.msg": "§aDarcy is defeated, his regime collapses. False peace descends...",
+
+  "_comment_keys": "=== Key Bindings ===",
+  "key.nujobraincraft.toggle_section_view": "Toggle Section View"
 }

@@ -8,8 +8,13 @@ import com.Hen3579.Nujomod.NujoBraincraft;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.blaze3d.vertex.VertexFormat;
+import org.joml.Matrix4f;
 import com.mojang.math.Axis;
 import org.lwjgl.glfw.GLFW;
 
@@ -32,6 +37,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -40,6 +47,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.InputEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.client.event.ViewportEvent;
@@ -55,6 +63,10 @@ import net.minecraft.world.scores.Scoreboard;
 import net.minecraft.world.scores.Team;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
+import org.lwjgl.opengl.GL11;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.Hen3579.Nujomod.NujoBraincraft.MODID;
 
@@ -64,6 +76,7 @@ public class ClientEventHandler {
     public static final KeyMapping TOGGLE_FIRST_PERSON = createKeyMapping("toggle_first_person", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_FRONT = createKeyMapping("toggle_third_person_front", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_BACK = createKeyMapping("toggle_third_person_back", InputConstants.UNKNOWN.getValue());
+    public static final KeyMapping TOGGLE_SECTION_VIEW = createKeyMapping("toggle_section_view", GLFW.GLFW_KEY_V);
 
     /** 每 tick 标记：MouseButton.Pre 是否已消费了左键远程攻击（防止 consumeClick 双重触发） */
     private static boolean rangedAttackConsumedThisTick = false;
@@ -106,6 +119,20 @@ public class ClientEventHandler {
             // 退出鸟瞰时：关闭发光描边
             if (prevPerspective == 3 && newPerspective != 3) {
                 clearBirdviewGlow(mc);
+                BirdviewClientEvent.resetOcclusionHeight();
+
+                // 如果剖视图曾激活，标记附近区块需要重编译以恢复被剔除的方块
+                if (SectionViewCuller.isActive()) {
+                    int px = mc.player.blockPosition().getX();
+                    int pz = mc.player.blockPosition().getZ();
+                    int range = 48;
+                    mc.levelRenderer.setBlocksDirty(
+                        px - range, mc.level.getMinBuildHeight(), pz - range,
+                        px + range, mc.level.getMaxBuildHeight(), pz + range
+                    );
+                }
+
+                SectionViewCuller.reset();
                 // 通知服务器：鸟瞰模式关闭（解除飞行生物 Y 轴约束）
                 BirdviewNetwork.INSTANCE.sendToServer(new BirdviewStatePacket(false));
             }
@@ -149,6 +176,19 @@ public class ClientEventHandler {
             }
         }
 
+        // 鸟瞰模式：V 键切换剖视图手动覆盖开关
+        // 实际状态更新与区块重建在 handleEndPhase 中完成，避免 active 未更新就触发重编
+        if (BirdviewClientEvent.isBirdseyeActive() && TOGGLE_SECTION_VIEW.consumeClick()) {
+            SectionViewCuller.toggleManualOverride();
+            boolean overridden = SectionViewCuller.isManuallyOverridden();
+            mc.player.displayClientMessage(
+                Component.literal(overridden
+                    ? "§7[剖视图] §c已手动关闭"
+                    : "§7[剖视图] §a恢复自动检测"),
+                true
+            );
+        }
+
         // 鸟瞰模式：设置 yaw 对齐 + 平视
         if (BirdviewClientEvent.isBirdseyeActive()) {
             applyCameraAlignedInput(mc);
@@ -159,6 +199,46 @@ public class ClientEventHandler {
     private static void handleEndPhase(Minecraft mc) {
         if (!BirdviewClientEvent.isBirdseyeActive()) {
             return;
+        }
+
+        // === 建筑遮挡自适应高度：扫描头顶方块 → 平滑下压/回升相机 ===
+        if (mc.level != null && mc.player != null) {
+            // 先更新天空可见性：露天环境不压低相机，避免悬崖/山坡误判为洞穴天花板
+            BirdviewClientEvent.updateSkyVisibility(mc.level, mc.player.position());
+
+            double target = BirdviewClientEvent.calculateOcclusionHeight(mc.level, mc.player.position());
+            BirdviewClientEvent.setTargetBirdseyeHeight(target);
+            BirdviewClientEvent.updateOcclusionSmoothing();
+
+            // === 墙壁推离：六向射线 → 平滑推离相机远离墙面 ===
+            // 使用当前平滑后的相机位置做射线检测源（近似，下一帧更精确）
+            double h = BirdviewClientEvent.getEffectiveBirdseyeHeight();
+            double offset = h / Math.tan(Math.toRadians(BirdviewClientEvent.BIRDSEYE_PITCH));
+            double yawRad = Math.toRadians(BirdviewClientEvent.getFixedYaw());
+            Vec3 approxCamPos = new Vec3(
+                mc.player.getX() - Math.sin(yawRad) * offset + BirdviewClientEvent.getEffectivePushOffset().x,
+                mc.player.getY() + h + BirdviewClientEvent.getEffectivePushOffset().y,
+                mc.player.getZ() + Math.cos(yawRad) * offset + BirdviewClientEvent.getEffectivePushOffset().z
+            );
+            Vec3 playerEye = mc.player.getEyePosition();
+            Vec3 pushTarget = BirdviewClientEvent.calculateWallPush(mc.level, approxCamPos, playerEye);
+            BirdviewClientEvent.setTargetPushOffset(pushTarget);
+            BirdviewClientEvent.updateWallPushSmoothing();
+
+            // === 建筑剖视图：每 tick 检测封闭空间 + 状态变化时触发区块重编译 ===
+            SectionViewCuller.update(mc.level, mc.player.position());
+            if (SectionViewCuller.stateJustChanged()) {
+                // 区块刚刚进入/退出剖视状态 → 标记附近整柱区块需要重编译
+                // 使用世界 Min/Max Build Height 作为 Y 范围，避免屋顶/地下室漏重建
+                int px = mc.player.blockPosition().getX();
+                int pz = mc.player.blockPosition().getZ();
+                int range = 48; // 4 个区块范围
+                mc.levelRenderer.setBlocksDirty(
+                    px - range, mc.level.getMinBuildHeight(), pz - range,
+                    px + range, mc.level.getMaxBuildHeight(), pz + range
+                );
+                SectionViewCuller.confirmStateChange();
+            }
         }
 
         // 更新悬停方块/生物（virtCursor 已由 overlay 在 60 FPS 下实时更新）
@@ -494,6 +574,58 @@ public class ClientEventHandler {
         BirdviewClientEvent.setHoveredHitResult(bestHit);
     }
 
+    // ===== 剖视图调试信息 HUD =====
+
+    /** 在屏幕左上角显示剖视图 + 洞穴系数的实时状态，用于排查视觉异常 */
+    @SubscribeEvent
+    public static void onRenderDebugOverlay(RenderGuiOverlayEvent.Post event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+        if (!BirdviewClientEvent.isBirdseyeActive()) return;
+
+        var font = mc.font;
+        int x = 5;
+        int y = 5;
+        int lineHeight = 10;
+
+        // 剖视图状态
+        boolean active = SectionViewCuller.isActive();
+        boolean overridden = SectionViewCuller.isManuallyOverridden();
+        String sectionStatus = active
+            ? "§a激活"
+            : (overridden ? "§c已手动关闭" : "§7未激活");
+        event.getGuiGraphics().drawString(font,
+            "§f剖视图: " + sectionStatus + "  §8(yOff=" + SectionViewCuller.getDynamicRoofOffset() + ")",
+            x, y, 0xFFFFFFFF);
+        y += lineHeight;
+
+        // 洞穴系数
+        float cave = BirdviewClientEvent.getCaveFactor();
+        String caveColor = cave > 0.05f ? "§e" : "§7";
+        event.getGuiGraphics().drawString(font,
+            "§f洞穴系数: " + caveColor + String.format("%.3f", cave),
+            x, y, 0xFFFFFFFF);
+        y += lineHeight;
+
+        // 玩家坐标
+        Vec3 pp = mc.player.position();
+        event.getGuiGraphics().drawString(font,
+            "§7玩家: " + (int)pp.x + " " + (int)pp.y + " " + (int)pp.z,
+            x, y, 0xFFFFFFFF);
+        y += lineHeight;
+
+        // 相机坐标（近似）
+        double h = BirdviewClientEvent.getEffectiveBirdseyeHeight();
+        double ho = h / Math.tan(Math.toRadians(BirdviewClientEvent.BIRDSEYE_PITCH));
+        double yawRad = Math.toRadians(BirdviewClientEvent.getFixedYaw());
+        Vec3 pushOff = BirdviewClientEvent.getEffectivePushOffset();
+        event.getGuiGraphics().drawString(font,
+            "§7相机: " + (int)(pp.x - Math.sin(yawRad)*ho + pushOff.x) + " "
+                       + (int)(pp.y + h + pushOff.y) + " "
+                       + (int)(pp.z + Math.cos(yawRad)*ho + pushOff.z),
+            x, y, 0xFFFFFFFF);
+    }
+
     // ===== 方块高亮渲染 =====
 
     /** 渲染悬停方块的亮色边框 */
@@ -774,8 +906,21 @@ public class ClientEventHandler {
     @SubscribeEvent
     public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event) {
         if (event.getEntity().level().isClientSide) {
-            BirdviewClientEvent.reset();
             Minecraft mc = Minecraft.getInstance();
+            // 如果剖视图曾激活，标记附近区块需要重编译以恢复被剔除的方块
+            if (SectionViewCuller.isActive() && mc.levelRenderer != null) {
+                int px = mc.player.blockPosition().getX();
+                int pz = mc.player.blockPosition().getZ();
+                int range = 48;
+                mc.levelRenderer.setBlocksDirty(
+                    px - range, mc.level.getMinBuildHeight(), pz - range,
+                    px + range, mc.level.getMaxBuildHeight(), pz + range
+                );
+            }
+            BirdviewClientEvent.reset();
+            BirdviewClientEvent.resetOcclusionHeight();
+            BirdviewClientEvent.resetWallPushOffset();
+            SectionViewCuller.reset();
             mc.options.setCameraType(CameraType.FIRST_PERSON);
             clearBirdviewGlow(mc);
         }
@@ -795,7 +940,7 @@ public class ClientEventHandler {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
 
-        double height = BirdviewClientEvent.BIRDSEYE_HEIGHT;
+        double height = BirdviewClientEvent.getEffectiveBirdseyeHeight();
 
         // 水平偏移量 = 高度 / tan(参考俯仰角)
         double horizontalOffset = height / Math.tan(Math.toRadians(BirdviewClientEvent.BIRDSEYE_PITCH));
@@ -804,10 +949,11 @@ public class ClientEventHandler {
         double yawRad = Math.toRadians(fixedYaw);
 
         // 相机位置：玩家斜后方固定高度（固定世界方向，不随玩家旋转）
+        Vec3 pushOffset = BirdviewClientEvent.getEffectivePushOffset();
         Vec3 cameraPos = new Vec3(
-                mc.player.getX() - Math.sin(yawRad) * horizontalOffset,
-                mc.player.getY() + height,
-                mc.player.getZ() + Math.cos(yawRad) * horizontalOffset
+                mc.player.getX() - Math.sin(yawRad) * horizontalOffset + pushOffset.x,
+                mc.player.getY() + height + pushOffset.y,
+                mc.player.getZ() + Math.cos(yawRad) * horizontalOffset + pushOffset.z
         );
 
         ((CameraAccess) camera).nujo$setCameraPosition(cameraPos);

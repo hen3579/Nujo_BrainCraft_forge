@@ -16,7 +16,9 @@
   "client": [
     "CameraMixin",
     "OrthoViewMixin",
-    "MouseHandlerMixin"
+    "MouseHandlerMixin",
+    "FogRendererMixin",
+    "RenderChunkRegionMixin"
   ],
   "server": [],
   "injectors": {

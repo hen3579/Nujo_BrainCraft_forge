@@ -16,8 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * LevelRenderer Mixin — 替换透视投影为正交投影（RTS 风格）。
  *
  * 双重注入策略：
- * 1. @ModifyVariable 替换 renderLevel 的 projectionMatrix 参数
- *    → 影响 Frustum 裁剪、Forge 事件分发等所有内部使用
+ * 1. @ModifyVariable(ordinal=0) 替换 renderLevel 的 projectionMatrix 参数
+ *    → 影响实际渲染投影、Frustum 裁剪体构建、Forge 事件分发
  * 2. @Inject at HEAD 覆盖 RenderSystem 的全局投影矩阵
  *    → 影响所有 shader 渲染（方块、实体、线条等）
  *
@@ -28,7 +28,7 @@ public class OrthoViewMixin {
 
     /**
      * 替换 renderLevel 方法的 projectionMatrix 参数。
-     * 影响 Frustum 裁剪、RenderLevelStageEvent 分发的矩阵等内部使用。
+     * 影响实际渲染投影、Frustum 裁剪体构建、RenderLevelStageEvent 分发的矩阵等。
      */
     @ModifyVariable(method = "renderLevel", at = @At("HEAD"), argsOnly = true, ordinal = 0)
     private Matrix4f nujo$modifyProjectionMatrix(Matrix4f projectionMatrix) {
@@ -41,7 +41,8 @@ public class OrthoViewMixin {
     /**
      * 覆盖 RenderSystem 的全局投影矩阵。
      * 影响所有 shader 渲染（方块、实体、线条等）。
-     * 因为 renderLevel 内部不调用 setProjectionMatrix，所以此覆盖持续有效。
+     * renderLevel 内部不调用 setProjectionMatrix，所以此覆盖持续有效
+     * 直到被 GameRenderer 中后续渲染步骤（粒子/天气/半透明）覆盖。
      */
     @Inject(method = "renderLevel", at = @At("HEAD"), require = 0)
     private void nujo$onRenderLevelHead(CallbackInfo ci) {
@@ -52,4 +53,5 @@ public class OrthoViewMixin {
             );
         }
     }
+
 }

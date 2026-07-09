@@ -49,26 +49,37 @@ public class OrthoviewClientEvent {
 
     // ========== 正交投影矩阵 ==========
 
+    /** 室外近裁剪面（格），默认 0.1 */
+    private static final float NEAR_PLANE_OUTDOOR = 0.1f;
+    /** 深洞穴近裁剪面（格），推到 3.0 避免切穿岩壁 */
+    private static final float NEAR_PLANE_CAVE = 3.0f;
+    /** 远裁剪面，固定 1000 格 */
+    private static final float FAR_PLANE = 1000.0f;
+
     /**
      * 计算正交投影矩阵。
      * 可见范围以 zoom 为半高（block 数），半宽根据屏幕宽高比自动适配。
-     * 默认 zoom=30 → 垂直可见 60 格，水平可见 60 × aspect 格。
+     * 近裁剪面在洞穴中自动推远，避免正交投影切穿头顶岩壁露出黑色空洞。
      */
     public static Matrix4f getOrthoMatrix() {
         Minecraft mc = Minecraft.getInstance();
         Window window = mc.getWindow();
         if (window == null) {
-            return new Matrix4f().setOrtho(-30, 30, -30, 30, 0.1f, 1000.0f);
+            return new Matrix4f().setOrtho(-30, 30, -30, 30, NEAR_PLANE_OUTDOOR, FAR_PLANE);
         }
 
         float aspect = (float) window.getWidth() / (float) window.getHeight();
         float halfHeight = (float) zoom;
         float halfWidth = halfHeight * aspect;
 
+        // 动态近裁剪面：洞穴越深，近裁剪面推得越远
+        float caveFactor = BirdviewClientEvent.getCaveFactor();
+        float near = NEAR_PLANE_OUTDOOR + caveFactor * (NEAR_PLANE_CAVE - NEAR_PLANE_OUTDOOR);
+
         return new Matrix4f().setOrtho(
                 -halfWidth, halfWidth,
                 -halfHeight, halfHeight,
-                0.1f, 1000.0f
+                near, FAR_PLANE
         );
     }
 

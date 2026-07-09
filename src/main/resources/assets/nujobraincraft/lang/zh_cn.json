@@ -186,5 +186,8 @@
   "_comment_quest_messages": "=== 任务提示消息 ===",
   "story.nujobraincraft.quest.ch2_to_ch3.msg": "§b布瑞恩化作星光消散。海伦驻守浮岛。向南探索花海与城邦……",
   "story.nujobraincraft.quest.ch3_to_ch4.msg": "§c真相已明，是时候向达西宣战了！",
-  "story.nujobraincraft.quest.ch4_defeat_darcy.msg": "§a达西战败，政权崩塌。虚假和平降临世间……"
+  "story.nujobraincraft.quest.ch4_defeat_darcy.msg": "§a达西战败，政权崩塌。虚假和平降临世间……",
+
+  "_comment_keys": "=== 按键绑定 ===",
+  "key.nujobraincraft.toggle_section_view": "切换剖视图开关"
 }

@@ -131,6 +131,14 @@ public class NujoBraincraft
         {}
 
         @SubscribeEvent
+        public static void registerKeyMappings(net.minecraftforge.client.event.RegisterKeyMappingsEvent event) {
+            event.register(ClientEventHandler.TOGGLE_FIRST_PERSON);
+            event.register(ClientEventHandler.TOGGLE_THIRD_PERSON_FRONT);
+            event.register(ClientEventHandler.TOGGLE_THIRD_PERSON_BACK);
+            event.register(ClientEventHandler.TOGGLE_SECTION_VIEW);
+        }
+
+        @SubscribeEvent
         public static void registerGuiOverlays(net.minecraftforge.client.event.RegisterGuiOverlaysEvent event) {
             event.registerAboveAll(BirdviewCursorOverlay.ID.getPath(), new BirdviewCursorOverlay());
         }
