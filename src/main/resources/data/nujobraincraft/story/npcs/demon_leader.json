@@ -1,0 +1,8 @@
+{
+  "id": "demon_leader",
+  "entity_type": "nujobraincraft:nujo_thinker",
+  "display_name": "story.nujobraincraft.npc.demon_leader.name",
+  "default_dialogue": "demon_leader_preliminary",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

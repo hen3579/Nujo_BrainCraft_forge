@@ -1,0 +1,32 @@
+{
+  "id": "villager_before",
+  "speaker": "nujobraincraft:secular_villager",
+  "speaker_name": "story.nujobraincraft.npc.secular_villager.name",
+  "start_node": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "story.nujobraincraft.dialogue.villager_before.greeting",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.villager_before.opt_ask_demon",
+          "next": "line1"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.villager_before.opt_ask_darcy",
+          "next": "line2"
+        }
+      ]
+    },
+    {
+      "id": "line1",
+      "text": "story.nujobraincraft.dialogue.villager_before.line1",
+      "next": "greeting"
+    },
+    {
+      "id": "line2",
+      "text": "story.nujobraincraft.dialogue.villager_before.line2",
+      "next": "greeting"
+    }
+  ]
+}

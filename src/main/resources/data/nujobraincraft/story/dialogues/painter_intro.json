@@ -1,0 +1,24 @@
+{
+  "id": "painter_intro",
+  "speaker": "nujobraincraft:painter",
+  "speaker_name": "story.nujobraincraft.npc.painter.name",
+  "start_node": "narrative",
+  "nodes": [
+    {
+      "id": "narrative",
+      "text": "story.nujobraincraft.dialogue.painter_intro.narrative",
+      "next": "guidance"
+    },
+    {
+      "id": "guidance",
+      "text": "story.nujobraincraft.dialogue.painter_intro.guidance",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.painter_intro.opt_accept",
+          "next": null,
+          "action": { "type": "give_item", "item": "nujobraincraft:cross_dim_blueprint", "count": 1 }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ch5_brian_farewell",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "brian"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "final_farewell_talk" },
+    { "type": "not_has_flag", "flag": "brian_farewell_done" }
+  ],
+  "actions": [
+    { "type": "set_flag", "flag": "brian_farewell_done" },
+    { "type": "dialogue", "id": "brian_starlight_farewell" },
+    { "type": "give_item", "item": "nujobraincraft:memory_fragment", "count": 20 },
+    { "type": "change_stage", "id": "unlock_empty_dim" }
+  ],
+  "once": true
+}

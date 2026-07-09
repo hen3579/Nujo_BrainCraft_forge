@@ -1,0 +1,17 @@
+{
+  "id": "ch6_communion",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "nujo_blank"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "finish_main_story" },
+    { "type": "not_has_flag", "flag": "communion_complete" }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "nujo_blank_communion" },
+    { "type": "set_flag", "flag": "communion_complete" },
+    { "type": "add_mark", "mark": "blank_recognized", "stars": 5 }
+  ],
+  "once": true
+}

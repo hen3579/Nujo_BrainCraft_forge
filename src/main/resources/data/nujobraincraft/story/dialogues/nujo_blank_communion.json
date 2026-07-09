@@ -1,0 +1,81 @@
+{
+  "id": "nujo_blank_communion",
+  "speaker": "nujobraincraft:nujo_blank",
+  "speaker_name": "story.nujobraincraft.npc.nujo_blank.name",
+  "start_node": "void_silence",
+  "nodes": [
+    {
+      "id": "void_silence",
+      "text": "story.nujobraincraft.dialogue.blank_communion.void_silence",
+      "next": "blank_origin"
+    },
+    {
+      "id": "blank_origin",
+      "text": "story.nujobraincraft.dialogue.blank_communion.blank_origin",
+      "next": "snow_metaphor"
+    },
+    {
+      "id": "snow_metaphor",
+      "text": "story.nujobraincraft.dialogue.blank_communion.snow_metaphor",
+      "next": "trapped_world"
+    },
+    {
+      "id": "trapped_world",
+      "text": "story.nujobraincraft.dialogue.blank_communion.trapped_world",
+      "next": "seen_all"
+    },
+    {
+      "id": "seen_all",
+      "text": "story.nujobraincraft.dialogue.blank_communion.seen_all",
+      "next": "question_purpose"
+    },
+    {
+      "id": "question_purpose",
+      "text": "story.nujobraincraft.dialogue.blank_communion.question_purpose",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.blank_communion.opt_truth",
+          "next": "answer_truth"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.blank_communion.opt_home",
+          "next": "answer_home"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.blank_communion.opt_connection",
+          "next": "answer_connection"
+        }
+      ]
+    },
+    {
+      "id": "answer_truth",
+      "text": "story.nujobraincraft.dialogue.blank_communion.answer_truth",
+      "next": "recognition"
+    },
+    {
+      "id": "answer_home",
+      "text": "story.nujobraincraft.dialogue.blank_communion.answer_home",
+      "next": "recognition"
+    },
+    {
+      "id": "answer_connection",
+      "text": "story.nujobraincraft.dialogue.blank_communion.answer_connection",
+      "next": "recognition"
+    },
+    {
+      "id": "recognition",
+      "text": "story.nujobraincraft.dialogue.blank_communion.recognition",
+      "next": "permission"
+    },
+    {
+      "id": "permission",
+      "text": "story.nujobraincraft.dialogue.blank_communion.permission",
+      "next": "farewell"
+    },
+    {
+      "id": "farewell",
+      "text": "story.nujobraincraft.dialogue.blank_communion.farewell",
+      "next": null
+    }
+  ]
+}

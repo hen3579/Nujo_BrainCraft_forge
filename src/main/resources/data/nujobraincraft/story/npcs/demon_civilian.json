@@ -1,0 +1,8 @@
+{
+  "id": "demon_civilian",
+  "entity_type": "nujobraincraft:nujo_thinker",
+  "display_name": "story.nujobraincraft.npc.demon_civilian.name",
+  "default_dialogue": "demon_civilian_chat",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

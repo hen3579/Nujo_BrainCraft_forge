@@ -1,0 +1,13 @@
+{
+  "id": "brian_starlight_farewell",
+  "speaker": "nujobraincraft:brian",
+  "speaker_name": "story.nujobraincraft.npc.brian.name",
+  "start_node": "starlight",
+  "nodes": [
+    {
+      "id": "starlight",
+      "text": "story.nujobraincraft.dialogue.brian_farewell.starlight",
+      "next": null
+    }
+  ]
+}

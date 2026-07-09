@@ -1,0 +1,17 @@
+{
+  "id": "ch3_meet_demon_leader",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "demon_leader"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "meet_brian_helen" },
+    { "type": "not_has_flag", "flag": "learned_truth" }
+  ],
+  "actions": [
+    { "type": "set_flag", "flag": "learned_truth" },
+    { "type": "dialogue", "id": "demon_leader_preliminary" },
+    { "type": "change_stage", "id": "know_truth_injustice" }
+  ],
+  "once": true
+}

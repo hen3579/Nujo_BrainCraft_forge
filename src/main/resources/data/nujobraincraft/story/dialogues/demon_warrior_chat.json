@@ -1,0 +1,32 @@
+{
+  "id": "demon_warrior_chat",
+  "speaker": "nujobraincraft:demon_warrior",
+  "speaker_name": "story.nujobraincraft.npc.demon_warrior.name",
+  "start_node": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "story.nujobraincraft.dialogue.demon_warrior_chat.greeting",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.demon_warrior_chat.opt1",
+          "next": "line1"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.demon_warrior_chat.opt2",
+          "next": "line2"
+        }
+      ]
+    },
+    {
+      "id": "line1",
+      "text": "story.nujobraincraft.dialogue.demon_warrior_chat.line1",
+      "next": "greeting"
+    },
+    {
+      "id": "line2",
+      "text": "story.nujobraincraft.dialogue.demon_warrior_chat.line2",
+      "next": "greeting"
+    }
+  ]
+}

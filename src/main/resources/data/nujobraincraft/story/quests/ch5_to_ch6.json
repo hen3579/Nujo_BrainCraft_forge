@@ -1,0 +1,15 @@
+{
+  "id": "ch5_to_ch6",
+  "trigger": {
+    "type": "dimension_change",
+    "to": "nujobraincraft:source_void"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "unlock_empty_dim" }
+  ],
+  "actions": [
+    { "type": "change_stage", "id": "finish_main_story" },
+    { "type": "spawn_npc", "npc": "nujo_blank", "x": 0, "y": 0, "z": 0 }
+  ],
+  "once": true
+}

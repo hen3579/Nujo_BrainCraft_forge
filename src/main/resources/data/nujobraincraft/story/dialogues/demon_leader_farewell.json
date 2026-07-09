@@ -1,0 +1,13 @@
+{
+  "id": "demon_leader_farewell",
+  "speaker": "nujobraincraft:demon_leader",
+  "speaker_name": "story.nujobraincraft.npc.demon_leader.name",
+  "start_node": "farewell",
+  "nodes": [
+    {
+      "id": "farewell",
+      "text": "story.nujobraincraft.dialogue.demon_farewell.farewell",
+      "next": null
+    }
+  ]
+}

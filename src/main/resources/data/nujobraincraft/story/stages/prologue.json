@@ -1,0 +1,9 @@
+{
+  "id": "prologue",
+  "chapter": "prologue",
+  "chapter_index": 0,
+  "display_name": "story.nujobraincraft.stage.prologue.title",
+  "description": "story.nujobraincraft.stage.prologue.desc",
+  "initial_marks": {},
+  "on_enter": []
+}

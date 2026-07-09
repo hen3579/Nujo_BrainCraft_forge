@@ -1,0 +1,11 @@
+{
+  "id": "know_truth_injustice",
+  "chapter": "brain_world",
+  "chapter_index": 4,
+  "display_name": "story.nujobraincraft.stage.know_truth_injustice.title",
+  "description": "story.nujobraincraft.stage.know_truth_injustice.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.know_truth_injustice.enter", "color": "light_purple" }
+  ]
+}

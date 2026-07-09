@@ -1,0 +1,16 @@
+{
+  "id": "ch4_defeat_darcy",
+  "trigger": {
+    "type": "kill_boss",
+    "boss": "darcy"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "defeat_darcy" }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "darcy_defeated" },
+    { "type": "add_mark", "mark": "war_hero", "stars": 5 },
+    { "type": "message", "text": "story.nujobraincraft.quest.ch4_defeat_darcy.msg", "color": "green" }
+  ],
+  "once": true
+}

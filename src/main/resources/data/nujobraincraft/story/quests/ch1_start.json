@@ -1,0 +1,14 @@
+{
+  "id": "ch1_start",
+  "trigger": {
+    "type": "custom",
+    "custom_id": "player_login"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "prologue" }
+  ],
+  "actions": [
+    { "type": "change_stage", "id": "world_abnormal" }
+  ],
+  "once": true
+}

@@ -1,0 +1,32 @@
+{
+  "id": "demon_elder_chat",
+  "speaker": "nujobraincraft:demon_elder",
+  "speaker_name": "story.nujobraincraft.npc.demon_elder.name",
+  "start_node": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "story.nujobraincraft.dialogue.demon_elder_chat.greeting",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.demon_elder_chat.opt1",
+          "next": "line1"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.demon_elder_chat.opt2",
+          "next": "line2"
+        }
+      ]
+    },
+    {
+      "id": "line1",
+      "text": "story.nujobraincraft.dialogue.demon_elder_chat.line1",
+      "next": "greeting"
+    },
+    {
+      "id": "line2",
+      "text": "story.nujobraincraft.dialogue.demon_elder_chat.line2",
+      "next": "greeting"
+    }
+  ]
+}

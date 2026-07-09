@@ -1,0 +1,8 @@
+{
+  "id": "brian",
+  "entity_type": "nujobraincraft:nujo_thinker",
+  "display_name": "story.nujobraincraft.npc.brian.name",
+  "default_dialogue": "brian_meet",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "darcy_confrontation",
+  "speaker": "nujobraincraft:darcy",
+  "speaker_name": "story.nujobraincraft.npc.darcy.name",
+  "start_node": "pre_boss",
+  "nodes": [
+    {
+      "id": "pre_boss",
+      "text": "story.nujobraincraft.dialogue.darcy.pre_boss",
+      "next": "battle_loop"
+    },
+    {
+      "id": "battle_loop",
+      "text": "story.nujobraincraft.dialogue.darcy.battle_loop",
+      "next": null
+    }
+  ]
+}

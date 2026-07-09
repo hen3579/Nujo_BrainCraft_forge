@@ -1,0 +1,8 @@
+{
+  "id": "demon_elder",
+  "entity_type": "nujobraincraft:nujo_thinker",
+  "display_name": "story.nujobraincraft.npc.demon_elder.name",
+  "default_dialogue": "demon_elder_chat",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

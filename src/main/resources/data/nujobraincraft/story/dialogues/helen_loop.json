@@ -1,0 +1,32 @@
+{
+  "id": "helen_loop",
+  "speaker": "nujobraincraft:helen",
+  "speaker_name": "story.nujobraincraft.npc.helen.name",
+  "start_node": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "story.nujobraincraft.dialogue.helen_loop.greeting",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.helen_loop.opt_brian",
+          "next": "line1"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.helen_loop.opt_direction",
+          "next": "line2"
+        }
+      ]
+    },
+    {
+      "id": "line1",
+      "text": "story.nujobraincraft.dialogue.helen_loop.line1",
+      "next": "greeting"
+    },
+    {
+      "id": "line2",
+      "text": "story.nujobraincraft.dialogue.helen_loop.line2",
+      "next": "greeting"
+    }
+  ]
+}

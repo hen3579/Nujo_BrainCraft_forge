@@ -1,0 +1,8 @@
+{
+  "id": "secular_villager",
+  "entity_type": "minecraft:villager",
+  "display_name": "story.nujobraincraft.npc.secular_villager.name",
+  "default_dialogue": "villager_before",
+  "interact_quests": [],
+  "portrait": "minecraft:textures/entity/villager/villager.png"
+}

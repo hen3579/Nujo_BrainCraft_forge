@@ -1,0 +1,15 @@
+{
+  "id": "defeat_darcy",
+  "chapter": "brain_world",
+  "chapter_index": 5,
+  "display_name": "story.nujobraincraft.stage.defeat_darcy.title",
+  "description": "story.nujobraincraft.stage.defeat_darcy.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.defeat_darcy.enter", "color": "red" }
+  ],
+  "on_exit": [
+    { "type": "add_mark", "mark": "war_hero", "stars": 5 },
+    { "type": "message", "text": "story.nujobraincraft.stage.defeat_darcy.exit", "color": "green" }
+  ]
+}

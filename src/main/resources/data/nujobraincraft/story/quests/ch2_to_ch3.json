@@ -1,0 +1,16 @@
+{
+  "id": "ch2_to_ch3",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "brian"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "enter_brain_world" },
+    { "type": "has_flag", "flag": "met_brian" }
+  ],
+  "actions": [
+    { "type": "change_stage", "id": "meet_brian_helen" },
+    { "type": "message", "text": "story.nujobraincraft.quest.ch2_to_ch3.msg", "color": "aqua" }
+  ],
+  "once": true
+}

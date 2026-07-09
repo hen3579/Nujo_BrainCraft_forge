@@ -1,0 +1,20 @@
+{
+  "id": "ch4_villager_after",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "secular_villager"
+  },
+  "conditions": [
+    { "type": "or",
+      "conditions": [
+        { "type": "stage_equals", "stage": "defeat_darcy" },
+        { "type": "stage_equals", "stage": "final_farewell_talk" },
+        { "type": "stage_equals", "stage": "unlock_empty_dim" }
+      ]
+    }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "villager_after" }
+  ],
+  "once": false
+}

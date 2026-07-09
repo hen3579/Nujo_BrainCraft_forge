@@ -1,0 +1,16 @@
+{
+  "id": "ch2_meet_brian",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "brian"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "enter_brain_world" },
+    { "type": "not_has_flag", "flag": "met_brian" }
+  ],
+  "actions": [
+    { "type": "set_flag", "flag": "met_brian" },
+    { "type": "dialogue", "id": "brian_meet" }
+  ],
+  "once": true
+}

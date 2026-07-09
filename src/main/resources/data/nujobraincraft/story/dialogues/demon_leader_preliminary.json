@@ -1,0 +1,18 @@
+{
+  "id": "demon_leader_preliminary",
+  "speaker": "nujobraincraft:demon_leader",
+  "speaker_name": "story.nujobraincraft.npc.demon_leader.name",
+  "start_node": "preliminary",
+  "nodes": [
+    {
+      "id": "preliminary",
+      "text": "story.nujobraincraft.dialogue.demon_preliminary.preliminary",
+      "next": "player_inner"
+    },
+    {
+      "id": "player_inner",
+      "text": "story.nujobraincraft.dialogue.demon_preliminary.player_inner",
+      "next": null
+    }
+  ]
+}

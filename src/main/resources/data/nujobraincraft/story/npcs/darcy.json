@@ -1,0 +1,8 @@
+{
+  "id": "darcy",
+  "entity_type": "minecraft:wither",
+  "display_name": "story.nujobraincraft.npc.darcy.name",
+  "default_dialogue": "darcy_confrontation",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

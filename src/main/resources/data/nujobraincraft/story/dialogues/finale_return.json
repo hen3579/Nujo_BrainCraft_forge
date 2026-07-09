@@ -1,0 +1,23 @@
+{
+  "id": "finale_return",
+  "speaker": "nujobraincraft:painter",
+  "speaker_name": "story.nujobraincraft.npc.painter.name",
+  "start_node": "return",
+  "nodes": [
+    {
+      "id": "return",
+      "text": "story.nujobraincraft.dialogue.finale.return",
+      "next": "bone_fish_reunion"
+    },
+    {
+      "id": "bone_fish_reunion",
+      "text": "story.nujobraincraft.dialogue.finale.bone_fish_reunion",
+      "next": "foreshadow"
+    },
+    {
+      "id": "foreshadow",
+      "text": "story.nujobraincraft.dialogue.finale.foreshadow",
+      "next": null
+    }
+  ]
+}

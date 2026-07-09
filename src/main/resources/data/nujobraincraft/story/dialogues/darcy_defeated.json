@@ -1,0 +1,13 @@
+{
+  "id": "darcy_defeated",
+  "speaker": "nujobraincraft:darcy",
+  "speaker_name": "story.nujobraincraft.npc.darcy.name",
+  "start_node": "defeated",
+  "nodes": [
+    {
+      "id": "defeated",
+      "text": "story.nujobraincraft.dialogue.darcy_defeated.defeated",
+      "next": null
+    }
+  ]
+}

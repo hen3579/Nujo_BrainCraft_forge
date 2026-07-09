@@ -1,0 +1,11 @@
+{
+  "id": "unlock_empty_dim",
+  "chapter": "brain_world",
+  "chapter_index": 7,
+  "display_name": "story.nujobraincraft.stage.unlock_empty_dim.title",
+  "description": "story.nujobraincraft.stage.unlock_empty_dim.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.unlock_empty_dim.enter", "color": "aqua" }
+  ]
+}

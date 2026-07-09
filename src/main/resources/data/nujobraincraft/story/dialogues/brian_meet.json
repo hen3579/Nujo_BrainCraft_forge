@@ -1,0 +1,67 @@
+{
+  "id": "brian_meet",
+  "speaker": "nujobraincraft:brian",
+  "speaker_name": "story.nujobraincraft.npc.brian.name",
+  "start_node": "confront",
+  "nodes": [
+    {
+      "id": "confront",
+      "text": "story.nujobraincraft.dialogue.brian_meet.brian_confront",
+      "next": "helen_warn"
+    },
+    {
+      "id": "helen_warn",
+      "text": "story.nujobraincraft.dialogue.brian_meet.helen_warn",
+      "next": "choice"
+    },
+    {
+      "id": "choice",
+      "text": "story.nujobraincraft.dialogue.brian_meet.choice",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.brian_meet.opt_seek_root",
+          "next": "branch1_player"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.brian_meet.opt_ask_history",
+          "next": "branch2_player"
+        }
+      ]
+    },
+    {
+      "id": "branch1_player",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch1_player",
+      "next": "branch1_brian"
+    },
+    {
+      "id": "branch1_brian",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch1_brian",
+      "next": "branch1_helen"
+    },
+    {
+      "id": "branch1_helen",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch1_helen",
+      "next": "dispersal"
+    },
+    {
+      "id": "branch2_player",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch2_player",
+      "next": "branch2_brian"
+    },
+    {
+      "id": "branch2_brian",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch2_brian",
+      "next": "branch2_helen"
+    },
+    {
+      "id": "branch2_helen",
+      "text": "story.nujobraincraft.dialogue.brian_meet.branch2_helen",
+      "next": "dispersal"
+    },
+    {
+      "id": "dispersal",
+      "text": "story.nujobraincraft.dialogue.brian_meet.dispersal",
+      "next": null
+    }
+  ]
+}

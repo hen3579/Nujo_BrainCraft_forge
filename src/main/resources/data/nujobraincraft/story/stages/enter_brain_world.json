@@ -1,0 +1,11 @@
+{
+  "id": "enter_brain_world",
+  "chapter": "brain_world",
+  "chapter_index": 2,
+  "display_name": "story.nujobraincraft.stage.enter_brain_world.title",
+  "description": "story.nujobraincraft.stage.enter_brain_world.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.enter_brain_world.enter", "color": "aqua" }
+  ]
+}

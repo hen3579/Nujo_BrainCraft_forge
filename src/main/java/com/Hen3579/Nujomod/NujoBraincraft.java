@@ -4,6 +4,9 @@ import com.Hen3579.Nujomod.Client.Events.BirdviewCursorOverlay;
 import com.Hen3579.Nujomod.Client.Events.ClientEventHandler;
 import com.Hen3579.Nujomod.Inits.*;
 import com.Hen3579.Nujomod.Network.BirdviewNetwork;
+import com.Hen3579.Nujomod.Story.StoryCapabilityRegistration;
+import com.Hen3579.Nujomod.Story.command.StoryCommand;
+import com.Hen3579.Nujomod.Story.network.StoryNetwork;
 import com.mojang.logging.LogUtils;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -13,6 +16,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.BuildCreativeModeTabContentsEvent;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -64,6 +68,12 @@ public class NujoBraincraft
         InitBlocks.BLOCKS.register(modEventBus);
         CreativeTabReg.TABS.register(modEventBus);
 
+        // === 剧情系统注册 ===
+        // 注册 Capability
+        modEventBus.addListener(StoryCapabilityRegistration::register);
+        // 注册命令
+        MinecraftForge.EVENT_BUS.addListener(NujoBraincraft::onRegisterCommands);
+
     }
 
     private void commonSetup(final FMLCommonSetupEvent event)
@@ -73,6 +83,9 @@ public class NujoBraincraft
 
         // 注册网络通道（客户端→服务器鸟瞰状态同步）
         event.enqueueWork(BirdviewNetwork::register);
+
+        // 注册剧情系统网络通道
+        event.enqueueWork(StoryNetwork::register);
     }
 
     // Add the example block item to the building blocks tab
@@ -102,6 +115,11 @@ public class NujoBraincraft
     {
         // Do something when the server starts
         LOGGER.info("HELLO from server starting");
+    }
+
+    /** 注册剧情命令 */
+    private static void onRegisterCommands(RegisterCommandsEvent event) {
+        StoryCommand.register(event.getDispatcher());
     }
 
     // You can use EventBusSubscriber to automatically register all static methods in the class annotated with @SubscribeEvent

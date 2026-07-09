@@ -1,0 +1,13 @@
+{
+  "id": "tombstone_inscription",
+  "speaker": "nujobraincraft:demon_elder",
+  "speaker_name": "story.nujobraincraft.dialogue.tombstone.label",
+  "start_node": "inscription",
+  "nodes": [
+    {
+      "id": "inscription",
+      "text": "story.nujobraincraft.dialogue.tombstone.inscription",
+      "next": null
+    }
+  ]
+}

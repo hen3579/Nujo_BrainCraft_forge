@@ -44,4 +44,14 @@ public class InitItems {
                     0xE3DAC9, // 次要颜色（米色）
                     new Item.Properties()));
 
+    // ===== 剧情关键道具 =====
+    public static final RegistryObject<Item> DOMAIN_RULE_FRAGMENT = ITEMS.register("domain_rule_fragment",
+            () -> new Item(new Item.Properties()));
+    public static final RegistryObject<Item> CROSS_DIM_BLUEPRINT = ITEMS.register("cross_dim_blueprint",
+            () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> MEMORY_FRAGMENT = ITEMS.register("memory_fragment",
+            () -> new Item(new Item.Properties()));
+    public static final RegistryObject<Item> FORGOTTEN_FRAGMENT = ITEMS.register("forgotten_fragment",
+            () -> new Item(new Item.Properties()));
+
 }

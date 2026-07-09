@@ -1,0 +1,16 @@
+{
+  "id": "ch6_to_finale",
+  "trigger": {
+    "type": "dimension_change",
+    "to": "minecraft:overworld"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "finish_main_story" },
+    { "type": "has_flag", "flag": "communion_complete" }
+  ],
+  "actions": [
+    { "type": "change_stage", "id": "finale" },
+    { "type": "add_mark", "mark": "cross_dimension_traveler", "stars": 5 }
+  ],
+  "once": true
+}

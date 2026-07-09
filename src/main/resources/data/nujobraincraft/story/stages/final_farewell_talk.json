@@ -1,0 +1,11 @@
+{
+  "id": "final_farewell_talk",
+  "chapter": "brain_world",
+  "chapter_index": 6,
+  "display_name": "story.nujobraincraft.stage.final_farewell_talk.title",
+  "description": "story.nujobraincraft.stage.final_farewell_talk.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.final_farewell_talk.enter", "color": "aqua" }
+  ]
+}

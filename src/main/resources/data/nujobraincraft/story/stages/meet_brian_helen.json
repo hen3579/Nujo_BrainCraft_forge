@@ -1,0 +1,12 @@
+{
+  "id": "meet_brian_helen",
+  "chapter": "brain_world",
+  "chapter_index": 3,
+  "display_name": "story.nujobraincraft.stage.meet_brian_helen.title",
+  "description": "story.nujobraincraft.stage.meet_brian_helen.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.meet_brian_helen.enter", "color": "aqua" },
+    { "type": "dialogue", "id": "brian_meet" }
+  ]
+}

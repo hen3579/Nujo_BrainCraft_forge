@@ -1,0 +1,8 @@
+{
+  "id": "helen",
+  "entity_type": "nujobraincraft:nujo_thinker",
+  "display_name": "story.nujobraincraft.npc.helen.name",
+  "default_dialogue": "helen_loop",
+  "interact_quests": [],
+  "portrait": "nujobraincraft:textures/entity/nujo_thinker.png"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "ch3_demon_elder_chat",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "demon_elder"
+  },
+  "conditions": [
+    { "type": "or",
+      "conditions": [
+        { "type": "stage_equals", "stage": "meet_brian_helen" },
+        { "type": "stage_equals", "stage": "know_truth_injustice" },
+        { "type": "stage_equals", "stage": "defeat_darcy" }
+      ]
+    }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "demon_elder_chat" }
+  ],
+  "once": false
+}

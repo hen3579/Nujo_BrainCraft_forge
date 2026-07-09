@@ -20,6 +20,10 @@ public class CreativeTabReg {
             .displayItems((par, output) -> {
                 output.accept(IMAGINATIONAL_CORE.get());
                 output.accept(NUJO_THINKER_SPAWN_EGG.get());
+                output.accept(DOMAIN_RULE_FRAGMENT.get());
+                output.accept(CROSS_DIM_BLUEPRINT.get());
+                output.accept(MEMORY_FRAGMENT.get());
+                output.accept(FORGOTTEN_FRAGMENT.get());
             }).build());
 
     public static final RegistryObject<CreativeModeTab> NUJO_GROUP_TOOL_TABS = TABS.register("nujo_tool_group",() -> CreativeModeTab.builder()

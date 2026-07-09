@@ -1,0 +1,12 @@
+{
+  "id": "world_abnormal",
+  "chapter": "original_world",
+  "chapter_index": 1,
+  "display_name": "story.nujobraincraft.stage.world_abnormal.title",
+  "description": "story.nujobraincraft.stage.world_abnormal.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.world_abnormal.enter", "color": "gold" },
+    { "type": "dialogue", "id": "painter_intro" }
+  ]
+}

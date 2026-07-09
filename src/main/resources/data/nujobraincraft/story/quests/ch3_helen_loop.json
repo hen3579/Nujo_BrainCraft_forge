@@ -1,0 +1,14 @@
+{
+  "id": "ch3_helen_loop",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "helen"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "meet_brian_helen" }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "helen_loop" }
+  ],
+  "once": false
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ch5_demon_farewell",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "demon_leader"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "defeat_darcy" },
+    { "type": "not_has_flag", "flag": "demon_farewell_done" }
+  ],
+  "actions": [
+    { "type": "set_flag", "flag": "demon_farewell_done" },
+    { "type": "dialogue", "id": "demon_leader_farewell" },
+    { "type": "give_item", "item": "nujobraincraft:forgotten_fragment", "count": 20 },
+    { "type": "change_stage", "id": "final_farewell_talk" }
+  ],
+  "once": true
+}

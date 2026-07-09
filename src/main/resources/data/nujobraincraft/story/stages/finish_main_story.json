@@ -1,0 +1,12 @@
+{
+  "id": "finish_main_story",
+  "chapter": "source_void",
+  "chapter_index": 8,
+  "display_name": "story.nujobraincraft.stage.finish_main_story.title",
+  "description": "story.nujobraincraft.stage.finish_main_story.desc",
+  "initial_marks": {},
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.finish_main_story.enter", "color": "white" },
+    { "type": "dialogue", "id": "nujo_blank_communion" }
+  ]
+}

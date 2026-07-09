@@ -1,0 +1,19 @@
+{
+  "id": "ch3_villager_before",
+  "trigger": {
+    "type": "interact_npc",
+    "npc": "secular_villager"
+  },
+  "conditions": [
+    { "type": "or",
+      "conditions": [
+        { "type": "stage_equals", "stage": "meet_brian_helen" },
+        { "type": "stage_equals", "stage": "know_truth_injustice" }
+      ]
+    }
+  ],
+  "actions": [
+    { "type": "dialogue", "id": "villager_before" }
+  ],
+  "once": false
+}

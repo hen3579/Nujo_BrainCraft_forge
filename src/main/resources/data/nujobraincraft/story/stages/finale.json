@@ -1,0 +1,14 @@
+{
+  "id": "finale",
+  "chapter": "finale",
+  "chapter_index": 9,
+  "display_name": "story.nujobraincraft.stage.finale.title",
+  "description": "story.nujobraincraft.stage.finale.desc",
+  "initial_marks": {
+    "cross_dimension_traveler": 5
+  },
+  "on_enter": [
+    { "type": "message", "text": "story.nujobraincraft.stage.finale.enter", "color": "gold" },
+    { "type": "dialogue", "id": "finale_return" }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "id": "demon_child_chat",
+  "speaker": "nujobraincraft:demon_child",
+  "speaker_name": "story.nujobraincraft.npc.demon_child.name",
+  "start_node": "greeting",
+  "nodes": [
+    {
+      "id": "greeting",
+      "text": "story.nujobraincraft.dialogue.demon_child_chat.greeting",
+      "options": [
+        {
+          "text": "story.nujobraincraft.dialogue.demon_child_chat.opt1",
+          "next": "line1"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.demon_child_chat.opt2",
+          "next": "line2"
+        },
+        {
+          "text": "story.nujobraincraft.dialogue.demon_child_chat.opt3",
+          "next": "line3"
+        }
+      ]
+    },
+    {
+      "id": "line1",
+      "text": "story.nujobraincraft.dialogue.demon_child_chat.line1",
+      "next": "greeting"
+    },
+    {
+      "id": "line2",
+      "text": "story.nujobraincraft.dialogue.demon_child_chat.line2",
+      "next": "greeting"
+    },
+    {
+      "id": "line3",
+      "text": "story.nujobraincraft.dialogue.demon_child_chat.line3",
+      "next": "greeting"
+    }
+  ]
+}

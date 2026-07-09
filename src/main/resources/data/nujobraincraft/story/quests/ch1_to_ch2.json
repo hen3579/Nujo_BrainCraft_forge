@@ -1,0 +1,15 @@
+{
+  "id": "ch1_to_ch2",
+  "trigger": {
+    "type": "dimension_change",
+    "to": "nujobraincraft:brain_world"
+  },
+  "conditions": [
+    { "type": "stage_equals", "stage": "world_abnormal" },
+    { "type": "has_item", "item": "nujobraincraft:cross_dim_blueprint", "count": 1 }
+  ],
+  "actions": [
+    { "type": "change_stage", "id": "enter_brain_world" }
+  ],
+  "once": true
+}
