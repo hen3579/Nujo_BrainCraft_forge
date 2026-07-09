@@ -67,6 +67,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static com.Hen3579.Nujomod.NujoBraincraft.MODID;
 
@@ -76,7 +77,7 @@ public class ClientEventHandler {
     public static final KeyMapping TOGGLE_FIRST_PERSON = createKeyMapping("toggle_first_person", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_FRONT = createKeyMapping("toggle_third_person_front", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_BACK = createKeyMapping("toggle_third_person_back", InputConstants.UNKNOWN.getValue());
-    public static final KeyMapping TOGGLE_SECTION_VIEW = createKeyMapping("toggle_section_view", GLFW.GLFW_KEY_V);
+    public static final KeyMapping TOGGLE_SECTION_VIEW = createKeyMapping("toggle_section_view", GLFW.GLFW_KEY_PERIOD);
 
     /** 每 tick 标记：MouseButton.Pre 是否已消费了左键远程攻击（防止 consumeClick 双重触发） */
     private static boolean rangedAttackConsumedThisTick = false;
@@ -189,8 +190,15 @@ public class ClientEventHandler {
             );
         }
 
-        // 鸟瞰模式：设置 yaw 对齐 + 平视
+        // 鸟瞰模式：WASD 按下时立即清除寻路路径，再设置 yaw 对齐 + 平视
+        // 必须在 applyCameraAlignedInput 之前清除，否则同一 tick 内两个系统
+        // 同时 setDeltaMovement，导致抖动
         if (BirdviewClientEvent.isBirdseyeActive()) {
+            boolean wasdPressed = mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
+                    || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
+            if (wasdPressed && BirdviewClientEvent.hasMoveTarget()) {
+                BirdviewClientEvent.clearMoveTarget();
+            }
             applyCameraAlignedInput(mc);
         }
     }
@@ -244,13 +252,10 @@ public class ClientEventHandler {
         // 更新悬停方块/生物（virtCursor 已由 overlay 在 60 FPS 下实时更新）
         updateHoveredBlock(mc);
 
-        // 检查 WASD 是否按下（用于清除点击目标和自动跳跃）
-        boolean wasdPressed = mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
-                || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
-
-        // 按了 WASD 就取消点击移动目标
-        if (wasdPressed) {
-            BirdviewClientEvent.clearMoveTarget();
+        // 轮询异步寻路结果：后台线程完成时提取路径
+        List<Vec3> asyncResult = BirdviewClientEvent.pollAsyncPathResult();
+        if (asyncResult != null && asyncResult.size() >= 2) {
+            BirdviewClientEvent.setPath(asyncResult);
         }
 
         // 有移动目标时执行点击移动
@@ -258,14 +263,15 @@ public class ClientEventHandler {
             handleMoveToTarget(mc);
         }
 
+        // 检查 WASD 是否按下（用于自动跳跃和取消寻路）
+        boolean wasdPressed = mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
+                || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
+
         // 自动跳跃：WASD 按下时，在地面被阻挡（水平速度极小）则自动跳
         if (wasdPressed && mc.player.onGround()
                 && mc.player.getDeltaMovement().horizontalDistanceSqr() < 0.004) {
             mc.player.jumpFromGround();
         }
-
-        // 再次设置 yaw，确保渲染使用正确的朝向
-        applyCameraAlignedInput(mc);
 
         // 近战追杀每刻更新（左键触发后的自动追击）
         LockTargetSystem.chaseTick(mc);
@@ -292,29 +298,68 @@ public class ClientEventHandler {
     // ===== 相机对齐输入 =====
 
     /**
-     * LOL 风格：
-     * - 按 WASD 时：锁定 yaw 到 cameraLookYaw（屏幕上方方向），实现屏幕对齐移动
-     * - 不按 WASD 时：不碰 yaw，鼠标通过 turnPlayer() 自由控制玩家转身（用于瞄准生物）
-     * - 始终平视（防止玩家抬头低头）
+     * WASD 移动时：身体朝向始终同步实际移动方向。
+     * W=前方  S=后方  A=左方  D=右方，斜向按键自动合成对角线方向。
+     * 移动方式：始终朝面对方向直行，用 setDeltaMovement 覆盖 MC 默认 moveRelative，
+     * 否则按 S 时 forwardImpulse=-1 会导致实际移动方向与身体朝向差 180°。
+     * 不按任何方向键时：不碰 yaw 和速度，鼠标通过 turnPlayer() 自由控制玩家转身。
+     * 始终平视（防止玩家抬头低头）。
      */
     private static void applyCameraAlignedInput(Minecraft mc) {
-        boolean wasdPressed = mc.options.keyUp.isDown() || mc.options.keyDown.isDown()
-                || mc.options.keyLeft.isDown() || mc.options.keyRight.isDown();
+        float lookYaw = BirdviewClientEvent.getCameraLookYaw();
 
-        if (wasdPressed) {
-            // cameraLookYaw = 相机看向玩家的方向 = 屏幕中心方向
-            // 按 W 时玩家朝这个方向走 = 屏幕上方（远离相机）
-            float lookYaw = BirdviewClientEvent.getCameraLookYaw();
-            mc.player.setYRot(lookYaw);
-            mc.player.yBodyRot = lookYaw;
-            mc.player.yHeadRot = lookYaw;
+        boolean w = mc.options.keyUp.isDown();
+        boolean s = mc.options.keyDown.isDown();
+        boolean a = mc.options.keyLeft.isDown();
+        boolean d = mc.options.keyRight.isDown();
+
+        // 用向量合成替代角度平均，避免 0/360° 边界问题（如 W+A 平均 0+270=135 而非 315）
+        float forward = 0f;  // W=+1, S=-1
+        if (w && !s) forward = 1f;
+        else if (s && !w) forward = -1f;
+
+        float right = 0f;   // A=+1, D=-1（屏幕右侧=世界东方，沿-lookYaw旋转后X分量需反向）
+        if (a && !d) right = 1f;
+        else if (d && !a) right = -1f;
+
+        boolean hasInput = forward != 0f || right != 0f;
+
+        if (hasInput) {
+            // 旋转 (forward, right) 向量到世界空间
+            double rad = Math.toRadians(lookYaw);
+            double worldX = -Math.sin(rad) * forward + Math.cos(rad) * right;
+            double worldZ = Math.cos(rad) * forward + Math.sin(rad) * right;
+
+            // 归一化（斜向按键时为 √2，归一化后保持速度一致）
+            double len = Math.sqrt(worldX * worldX + worldZ * worldZ);
+            worldX /= len;
+            worldZ /= len;
+
+            float moveYaw = (float) Math.toDegrees(Math.atan2(-worldX, worldZ));
+            mc.player.setYRot(moveYaw);
+            mc.player.yBodyRot = moveYaw;
+            mc.player.yHeadRot = moveYaw;
+
+            // 覆盖移动：始终朝面对方向直行（所有 WASD 键都等效）
+            float speed = mc.player.getSpeed() * getTerminalVelocityMultiplier(mc);
+            if (mc.options.keySprint.isDown()) speed *= 1.3f;
+
+            if (mc.player.onGround()) {
+                mc.player.setDeltaMovement(worldX * speed, mc.player.getDeltaMovement().y, worldZ * speed);
+            } else {
+                mc.player.setDeltaMovement(
+                    Mth.lerp(0.3f, mc.player.getDeltaMovement().x, worldX * speed),
+                    mc.player.getDeltaMovement().y,
+                    Mth.lerp(0.3f, mc.player.getDeltaMovement().z, worldZ * speed)
+                );
+            }
         }
 
         // 始终平视
         mc.player.setXRot(0);
 
         // 冲刺
-        mc.player.setSprinting(mc.options.keySprint.isDown() && wasdPressed);
+        mc.player.setSprinting(mc.options.keySprint.isDown() && hasInput);
     }
 
     // ===== 玩家发光描边（通过 EntityRenderDispatcher 手动渲染触发 outline） =====
@@ -330,7 +375,7 @@ public class ClientEventHandler {
             team.setColor(ChatFormatting.AQUA);
             team.setNameTagVisibility(Team.Visibility.NEVER);
             team.setDeathMessageVisibility(Team.Visibility.NEVER);
-            team.setCollisionRule(Team.CollisionRule.NEVER);
+            team.setCollisionRule(Team.CollisionRule.ALWAYS);
             team.setAllowFriendlyFire(true);
         }
         PlayerTeam currentTeam = scoreboard.getPlayersTeam(mc.player.getScoreboardName());
@@ -402,51 +447,221 @@ public class ClientEventHandler {
             BirdviewClientEvent.setMoveTarget(targetPos);
             // 添加点击标记痕迹
             OrthoviewClientEvent.addClickMarker(targetPos);
+
+            // === A* 寻路：距离 >= 3 格时异步计算智能路径 ===
+            double directDist = mc.player.position().distanceTo(targetPos);
+            BirdviewClientEvent.clearPath(); // 先清除旧路径
+            if (directDist >= 3.0) {
+                BlockPos startBlock = mc.player.blockPosition();
+                BlockPos targetBlock = new BlockPos((int) targetPos.x, (int) targetPos.y, (int) targetPos.z);
+                // 捕获 level 引用（ClientLevel.getBlockState 在已加载区块内线程安全）
+                Level levelRef = mc.level;
+                BirdviewClientEvent.submitAsyncPath(
+                    CompletableFuture.supplyAsync(() -> AStarPathfinder.findPath(levelRef, startBlock, targetBlock, 3000, 0))
+                );
+            }
         }
         // 如果没有命中方块（点击天空），不设置目标
     }
 
-    /** 每帧向移动目标移动 */
+    /** 每帧向移动目标移动：优先走寻路路径，无路径时直线移动 */
     private static void handleMoveToTarget(Minecraft mc) {
         Vec3 target = BirdviewClientEvent.getMoveTarget();
         if (target == null) return;
 
-        Vec3 toTarget = target.subtract(mc.player.position());
-        double dist = toTarget.horizontalDistance();
+        Vec3 playerPos = mc.player.position();
+        double distToTarget = target.distanceTo(playerPos);
 
-        if (dist < 0.5) {
-            // 到达目标
+        // 到达目标
+        if (distToTarget < 0.6) {
             BirdviewClientEvent.clearMoveTarget();
+            mc.player.setDeltaMovement(0, mc.player.getDeltaMovement().y, 0);
             return;
         }
 
-        // 计算方向
+        // === 优先 A* 路径导航 ===
+        if (BirdviewClientEvent.hasPath()) {
+            if (navigatePath(mc, target)) return;
+            // navigatePath 返回 true 时表示路径导航已完成处理
+            // 返回 false 时回退到直线移动
+        }
+
+        // === 直线移动（无路径或路径导航回退） ===
+        navigateStraight(mc, target, playerPos, distToTarget);
+    }
+
+    /**
+     * 沿 A* 路径点导航。返回 true 表示已处理完毕（由路径接管），
+     * 返回 false 表示路径失效，应回退到直线移动。
+     */
+    private static boolean navigatePath(Minecraft mc, Vec3 finalTarget) {
+        Vec3 waypoint = BirdviewClientEvent.getCurrentWaypoint();
+        if (waypoint == null) {
+            BirdviewClientEvent.clearPath();
+            return false;
+        }
+
+        Vec3 playerPos = mc.player.position();
+        double wpDist = playerPos.distanceTo(waypoint);
+
+        // waypoint 到达判定：水平距离 < 0.75 格
+        if (wpDist < 0.75) {
+            BirdviewClientEvent.advanceWaypoint();
+            BirdviewClientEvent.resetStuckDetection();
+            if (BirdviewClientEvent.isPathComplete()) {
+                BirdviewClientEvent.clearPath();
+                return false; // 路径走完，让直线移动接手到最终目标
+            }
+            waypoint = BirdviewClientEvent.getCurrentWaypoint();
+            if (waypoint == null) return false;
+            wpDist = playerPos.distanceTo(waypoint);
+        }
+
+        // 如果玩家离最终目标比离当前 waypoint 更近，跳过中间 waypoint
+        double distToFinal = finalTarget.distanceTo(playerPos);
+        if (distToFinal < wpDist && distToFinal < 2.0) {
+            BirdviewClientEvent.clearPath();
+            return false;
+        }
+
+        // === 计算移动方向 ===
+        Vec3 dir = new Vec3(waypoint.x - playerPos.x, 0, waypoint.z - playerPos.z).normalize();
+        float moveYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
+
+        float speed = mc.player.getSpeed() * getTerminalVelocityMultiplier(mc);
+        if (mc.options.keySprint.isDown()) speed *= 1.3f;
+
+        // === 自动爬坡检测 ===
+        BlockPos playerBlock = mc.player.blockPosition();
+        BlockPos frontBlock = new BlockPos(
+            (int) Math.floor(playerPos.x + dir.x * 0.6),
+            playerBlock.getY(),
+            (int) Math.floor(playerPos.z + dir.z * 0.6)
+        );
+
+        if (mc.player.onGround()) {
+            boolean needClimb = detectFrontObstacle(mc, dir);
+
+            if (needClimb) {
+                // 尝试爬坡：检测前方方块是否可踏上
+                if (canStepUp(mc, dir)) {
+                    // 走上台阶（不跳，自然走上去）
+                    mc.player.setDeltaMovement(dir.x * speed, 0.15, dir.z * speed);
+                } else {
+                    // 1 格高障碍 → 跳跃
+                    mc.player.jumpFromGround();
+                    mc.player.setDeltaMovement(dir.x * speed * 0.7, mc.player.getDeltaMovement().y, dir.z * speed * 0.7);
+                }
+            } else {
+                // 无障碍 → 正常行走
+                mc.player.setDeltaMovement(dir.x * speed, mc.player.getDeltaMovement().y, dir.z * speed);
+            }
+        }
+
+        // 空中保持水平动量
+        if (!mc.player.onGround()) {
+            mc.player.setDeltaMovement(
+                Mth.lerp(0.3, mc.player.getDeltaMovement().x, dir.x * speed),
+                mc.player.getDeltaMovement().y,
+                Mth.lerp(0.3, mc.player.getDeltaMovement().z, dir.z * speed)
+            );
+        }
+
+        // 面向移动方向（锁定目标时不覆盖，由 chaseTick 控制朝向）
+        if (!LockTargetSystem.isLocked()) {
+            mc.player.setYRot(moveYaw);
+            mc.player.yBodyRot = moveYaw;
+            mc.player.yHeadRot = moveYaw;
+            mc.player.setXRot(0);
+        }
+
+        // === 卡住检测 ===
+        BirdviewClientEvent.updateStuckDetection(playerPos, mc.player.getDeltaMovement().horizontalDistance());
+        if (BirdviewClientEvent.isStuck()) {
+            // 路径点卡住 → 跳过该点，尝试下一个
+            BirdviewClientEvent.advanceWaypoint();
+            BirdviewClientEvent.resetStuckDetection();
+
+            if (BirdviewClientEvent.isPathComplete()) {
+                BirdviewClientEvent.clearPath();
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * 检测玩家前方是否有需要爬坡的障碍物。
+     * 扫描规则：前方 0.3~0.8 格范围内，脚底 + 脚底上方一格的方块。
+     */
+    private static boolean detectFrontObstacle(Minecraft mc, Vec3 dir) {
+        if (mc.level == null) return false;
+        Vec3 pos = mc.player.position();
+
+        // 检测两个高度：脚底 + 脚底上方
+        for (int dy = 0; dy <= 1; dy++) {
+            double checkX = pos.x + dir.x * 0.5;
+            double checkY = pos.y + dy;
+            double checkZ = pos.z + dir.z * 0.5;
+            BlockPos bp = new BlockPos((int) Math.floor(checkX), (int) Math.floor(checkY), (int) Math.floor(checkZ));
+            BlockState state = mc.level.getBlockState(bp);
+            if (!state.isAir() && !state.canBeReplaced()) {
+                if (dy == 0) return true; // 脚底有方块 = 障碍
+                // dy=1 时，只当方块是完整固体时才算障碍（楼梯/半砖顶不是障碍）
+                if (state.isSolidRender(mc.level, bp)) return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 判断前方障碍是否可"走上"而非跳跃。
+     * 可走上：楼梯、底层半砖、地毯等（方块高度 < 1 格）。
+     */
+    private static boolean canStepUp(Minecraft mc, Vec3 dir) {
+        if (mc.level == null) return false;
+        Vec3 pos = mc.player.position();
+
+        double checkX = pos.x + dir.x * 0.5;
+        double checkZ = pos.z + dir.z * 0.5;
+        BlockPos bp = new BlockPos((int) Math.floor(checkX), (int) Math.floor(pos.y), (int) Math.floor(checkZ));
+        BlockState state = mc.level.getBlockState(bp);
+        if (state.isAir() || state.canBeReplaced()) return false;
+
+        // 低矮方块：楼梯、半砖等 → 直接走上
+        if (state.getBlock() instanceof net.minecraft.world.level.block.StairBlock
+            || state.getBlock() instanceof net.minecraft.world.level.block.SlabBlock) {
+            return true;
+        }
+
+        // 碰撞箱高度 < 1.0 格的方块
+        if (state.getCollisionShape(mc.level, bp).max(net.minecraft.core.Direction.Axis.Y) < 0.6) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /** 直线移动（回退方案） */
+    private static void navigateStraight(Minecraft mc, Vec3 target, Vec3 playerPos, double dist) {
+        Vec3 toTarget = target.subtract(playerPos);
         Vec3 dir = new Vec3(toTarget.x, 0, toTarget.z).normalize();
         float moveYaw = (float) Math.toDegrees(Math.atan2(-dir.x, dir.z));
 
-        // 地上：覆盖水平速度 + 自动跳跃
         if (mc.player.onGround()) {
             float speed = mc.player.getSpeed() * getTerminalVelocityMultiplier(mc);
             if (mc.options.keySprint.isDown()) speed *= 1.3f;
 
-            mc.player.setDeltaMovement(
-                    dir.x * speed,
-                    mc.player.getDeltaMovement().y,
-                    dir.z * speed
-            );
+            mc.player.setDeltaMovement(dir.x * speed, mc.player.getDeltaMovement().y, dir.z * speed);
 
-            // 自动跳跃：检测到碰撞导致速度降低时跳
+            // 自动跳跃：速度严重下降 → 前方有障碍
             double hSpeed = mc.player.getDeltaMovement().horizontalDistance();
             if (hSpeed < speed * 0.3) {
-                // 严重减速 → 前方有障碍 → 自动跳跃
                 mc.player.jumpFromGround();
             }
-
-            // 连续被卡住超过半秒 → 向侧面跳一次（尝试绕过障碍）
-            // (通过观察是否在相同位置停留过久来实现)
         }
 
-        // 无论空中还是地上：面向移动方向，平视不低头
         mc.player.setYRot(moveYaw);
         mc.player.yBodyRot = moveYaw;
         mc.player.yHeadRot = moveYaw;
@@ -1029,15 +1244,17 @@ public class ClientEventHandler {
      * 计算终端速度系数：
      * 原版 getSpeed() 是加速度值，通过 moveRelative() 每帧累加再经过摩擦力衰减达到终端速度。
      * 直接 setDeltaMovement() 时需要乘以此系数以匹配原版步行速度。
-     * 系数 = 1 / (1 - 摩擦力)
+     * 地面：系数 = 1 / (1 - 方块摩擦 * 0.91)
+     * 空中：使用固定值 2.0，避免 setDeltaMovement 绕过空气阻力导致冲太猛
      */
     private static float getTerminalVelocityMultiplier(Minecraft mc) {
-        float friction = 0.91F; // 默认空气摩擦
-        if (mc.player.onGround()) {
-            BlockPos groundPos = mc.player.blockPosition().below();
-            float blockFriction = mc.level.getBlockState(groundPos).getBlock().getFriction();
-            friction = blockFriction * 0.91F;
+        if (!mc.player.onGround()) {
+            return 2.0f; // 空中降低倍率，避免跳跃冲太猛
         }
+        float friction = 0.91F;
+        BlockPos groundPos = mc.player.blockPosition().below();
+        float blockFriction = mc.level.getBlockState(groundPos).getBlock().getFriction();
+        friction = blockFriction * 0.91F;
         return 1.0f / (1.0f - friction);
     }
 

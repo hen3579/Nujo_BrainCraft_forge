@@ -12,6 +12,10 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
 /**
  * 视角循环状态管理器
  * 扩展原版 F5 三视角为四视角：第一人称 → 第三人称(背) → 第三人称(前) → 鸟瞰
@@ -372,6 +376,24 @@ public class BirdviewClientEvent {
     @Nullable
     private static Vec3 moveTarget = null;
 
+    /** A* 寻路路径点列表（null = 无路径/直线移动） */
+    @Nullable
+    private static List<Vec3> currentPath = null;
+
+    /** 当前路径点索引 */
+    private static int currentWaypointIndex = 0;
+
+    /** 异步寻路的 CompletableFuture（null = 无挂起的寻路请求） */
+    @Nullable
+    private static volatile CompletableFuture<List<Vec3>> pendingPathFuture = null;
+
+    /** 是否已取消挂起的寻路请求 */
+    private static volatile boolean pendingPathCancelled = false;
+
+    /** 卡住计时器：连续减速超过此阈值时触发重新寻路或绕路 */
+    private static int stuckTimer = 0;
+    private static Vec3 stuckPosition = Vec3.ZERO;
+
     /** 鼠标悬浮的方块坐标（用于高亮） */
     @Nullable
     private static BlockPos hoveredBlockPos = null;
@@ -390,6 +412,7 @@ public class BirdviewClientEvent {
         birdseyeActive = (currentPerspective == 3);
         if (!birdseyeActive) {
             moveTarget = null; // 退出鸟瞰时清除移动目标
+            clearPath();      // 清除寻路路径
             OrthoviewClientEvent.clearMarkers(); // 清除点击标记
             LockTargetSystem.unlockTarget(); // 清除锁定目标
             LockTargetSystem.clearRangedState(); // 清除远程攻击状态
@@ -425,6 +448,8 @@ public class BirdviewClientEvent {
         currentPerspective = 0;
         birdseyeActive = false;
         moveTarget = null;
+        clearPath();
+        cancelPendingPath();
         OrthoviewClientEvent.clearMarkers();
         LockTargetSystem.unlockTarget();
         LockTargetSystem.clearRangedState();
@@ -495,14 +520,136 @@ public class BirdviewClientEvent {
         return moveTarget;
     }
 
-    /** 清除移动目标 */
+    /** 清除移动目标（同时清除寻路路径和异步寻路请求） */
     public static void clearMoveTarget() {
         moveTarget = null;
+        clearPath();
+        cancelPendingPath();
     }
 
     /** 是否有移动目标 */
     public static boolean hasMoveTarget() {
         return moveTarget != null;
+    }
+
+    // ===== A* 寻路路径点导航 =====
+
+    /** 设置寻路路径，重置 waypoint 索引和卡住计时器 */
+    public static void setPath(@Nullable List<Vec3> path) {
+        currentPath = path;
+        currentWaypointIndex = 0;
+        stuckTimer = 0;
+        stuckPosition = Vec3.ZERO;
+    }
+
+    /** 获取当前路径点（null = 路径结束或无路径） */
+    @Nullable
+    public static Vec3 getCurrentWaypoint() {
+        if (currentPath == null || currentWaypointIndex >= currentPath.size()) return null;
+        return currentPath.get(currentWaypointIndex);
+    }
+
+    /** 前进到下一个路径点 */
+    public static void advanceWaypoint() {
+        currentWaypointIndex++;
+    }
+
+    /** 是否还有未到达的路径点 */
+    public static boolean hasPath() {
+        return currentPath != null && currentWaypointIndex < currentPath.size();
+    }
+
+    /** 路径点是否已全部到达 */
+    public static boolean isPathComplete() {
+        return currentPath != null && currentWaypointIndex >= currentPath.size();
+    }
+
+    /** 获取路径点总数（含已通过的） */
+    public static int getTotalWaypoints() {
+        return currentPath != null ? currentPath.size() : 0;
+    }
+
+    /** 获取剩余路径点数量 */
+    public static int getRemainingWaypoints() {
+        return hasPath() ? currentPath.size() - currentWaypointIndex : 0;
+    }
+
+    /** 清除路径（不清除 moveTarget，允许回退到直线移动） */
+    public static void clearPath() {
+        currentPath = null;
+        currentWaypointIndex = 0;
+        stuckTimer = 0;
+    }
+
+    // ===== 异步寻路 =====
+
+    /** 提交异步 A* 寻路请求 */
+    public static void submitAsyncPath(CompletableFuture<List<Vec3>> future) {
+        cancelPendingPath();
+        pendingPathCancelled = false;
+        pendingPathFuture = future;
+    }
+
+    /** 检查异步寻路是否完成。若完成，提取结果并清除 future */
+    @Nullable
+    public static List<Vec3> pollAsyncPathResult() {
+        CompletableFuture<List<Vec3>> f = pendingPathFuture;
+        if (f == null) return null;
+        if (!f.isDone()) return null;
+        pendingPathFuture = null;
+        if (pendingPathCancelled) {
+            pendingPathCancelled = false;
+            return null;
+        }
+        try {
+            return f.getNow(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 取消挂起的异步寻路请求 */
+    public static void cancelPendingPath() {
+        CompletableFuture<List<Vec3>> f = pendingPathFuture;
+        if (f != null) {
+            pendingPathCancelled = true;
+            f.cancel(true);
+            pendingPathFuture = null;
+        }
+    }
+
+    /** 是否有挂起的异步寻路请求 */
+    public static boolean hasPendingPath() {
+        return pendingPathFuture != null && !pendingPathFuture.isDone();
+    }
+
+    // ===== 卡住检测 =====
+
+    /** 更新卡住检测计时器。若玩家水平位移极小，累计 tick */
+    public static void updateStuckDetection(Vec3 currentPos, double speed) {
+        if (stuckTimer == 0) {
+            stuckPosition = currentPos;
+        }
+        if (speed < 0.01) {
+            stuckTimer++;
+        } else if (currentPos.distanceToSqr(stuckPosition) > 0.04) {
+            // 移动了，重置
+            stuckTimer = 0;
+            stuckPosition = currentPos;
+        } else {
+            stuckTimer++;
+        }
+    }
+
+    /** 是否连续卡住超过阈值（~30 ticks = 1.5 秒） */
+    public static boolean isStuck() {
+        return stuckTimer > 30;
+    }
+
+    /** 重置卡住检测 */
+    public static void resetStuckDetection() {
+        stuckTimer = 0;
+        stuckPosition = Vec3.ZERO;
     }
 
     // ===== 悬停方块高亮 =====

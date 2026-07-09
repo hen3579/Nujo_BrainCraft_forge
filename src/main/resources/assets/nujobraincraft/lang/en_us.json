@@ -187,6 +187,11 @@
   "story.nujobraincraft.quest.ch3_to_ch4.msg": "§cThe truth is known. Time to declare war on Darcy!",
   "story.nujobraincraft.quest.ch4_defeat_darcy.msg": "§aDarcy is defeated, his regime collapses. False peace descends...",
 
+  "nujobraincraft.general": "NujoBraincraft",
+
   "_comment_keys": "=== Key Bindings ===",
+  "key.nujobraincraft.toggle_first_person": "Toggle First Person",
+  "key.nujobraincraft.toggle_third_person_back": "Toggle Third Person Back",
+  "key.nujobraincraft.toggle_third_person_front": "Toggle Third Person Front",
   "key.nujobraincraft.toggle_section_view": "Toggle Section View"
 }

@@ -2,7 +2,11 @@ package com.Hen3579.Nujomod.Client.Events;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.StairBlock;
+import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.level.block.state.properties.SlabType;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -86,11 +90,14 @@ public class AStarPathfinder {
 
         PriorityQueue<Node> open = new PriorityQueue<>();
         Map<Long, Node> allNodes = new HashMap<>();
+        Set<Long> openSet = new HashSet<>();   // O(1) contains 检查，替代 PriorityQueue.contains() 的 O(n)
+        Set<Long> closedSet = new HashSet<>(); // 已扩展节点，防止重复处理
 
         Node startNode = new Node(start.getX(), startY, start.getZ());
         startNode.g = 0;
         startNode.f = heuristic(startNode, target);
         open.add(startNode);
+        openSet.add(key(start.getX(), start.getZ()));
         allNodes.put(key(start.getX(), start.getZ()), startNode);
 
         int nodesEvaluated = 0;
@@ -102,6 +109,8 @@ public class AStarPathfinder {
                 break;
             }
             Node current = open.poll();
+            openSet.remove(key(current.x, current.z));
+            closedSet.add(key(current.x, current.z));
             nodesEvaluated++;
 
             // 到达目标
@@ -132,6 +141,10 @@ public class AStarPathfinder {
                 double tentativeG = current.g + moveCost;
 
                 long k = key(nx, nz);
+
+                // 已在 closed set 中（之前扩展过）→ 跳过
+                if (closedSet.contains(k)) continue;
+
                 Node neighbor = allNodes.get(k);
                 if (neighbor == null) {
                     neighbor = new Node(nx, ny, nz);
@@ -153,7 +166,7 @@ public class AStarPathfinder {
                 neighbor.g = tentativeG;
                 neighbor.f = tentativeG + heuristic(neighbor, target);
                 neighbor.y = ny;
-                if (!open.contains(neighbor)) {
+                if (openSet.add(k)) {
                     open.add(neighbor);
                 }
             }
@@ -180,19 +193,24 @@ public class AStarPathfinder {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    /** 在指定 XZ 位置，从参考 Y 开始找可站立的高度（上下最多 3 格） */
+    /** 在指定 XZ 位置，从参考 Y 开始找可站立的高度（上下最多 3 格，支持楼梯/半砖台阶） */
     private static int findWalkableY(Level level, int x, int z, int refY) {
-        // 从 refY 附近开始搜索
+        // 向上搜索（爬坡）：最多 2 格
         for (int dy = 0; dy <= 2; dy++) {
             int y = refY + dy;
             if (isWalkable(level, x, y, z)) return y;
+            // 楼梯特殊处理：如果当前层是楼梯，玩家可以"站在上面一格"（踩在楼梯上）
+            if (dy < 2 && isStairStep(level, x, y, z)) {
+                int stairTop = y + 1;
+                if (isWalkable(level, x, stairTop, z)) return stairTop;
+            }
         }
-        // 尝试往下
+        // 向下搜索（下坡/下落）：最多 3 格
         for (int dy = 1; dy <= 3; dy++) {
             int y = refY - dy;
             if (isWalkable(level, x, y, z)) return y;
         }
-        return Integer.MIN_VALUE; // 不可行走
+        return Integer.MIN_VALUE;
     }
 
     /** 判断 (x, y, z) 是否可站立（脚下有方块、身上有空间） */
@@ -207,17 +225,50 @@ public class AStarPathfinder {
         BlockState stateBelow = level.getBlockState(below);
         BlockState stateAbove = level.getBlockState(above);
 
-        // 玩家站的格子必须可穿过（空气、草、水等）
-        if (!state.isAir() && !state.canBeReplaced()) return false;
-        // 头顶必须有空间
-        if (!stateAbove.isAir() && !stateAbove.canBeReplaced()) return false;
-        // 脚下必须有支撑
-        if (stateBelow.isAir() && !stateBelow.canBeReplaced()) return false;
+        // 占据格必须是空气或可替换（草、水等），或底层半砖/楼梯（视为 0.5 格高，头顶仍有 1.5 格空间）
+        boolean posOK = state.isAir() || state.canBeReplaced();
+        if (!posOK && isLowBlock(state) && isPassable(level, x, y + 1, z)) {
+            posOK = true;
+        }
 
-        // 跳跃 1 格高的情况：当前格子有方块但可以站上去（脚下是下面的方块）
-        // 已经在 isWalkable 中通过在 y+1 高度检测覆盖
+        // 头顶必须有空间（至少 1 格高）
+        boolean aboveOK = stateAbove.isAir() || stateAbove.canBeReplaced();
+        if (!aboveOK && isLowBlock(stateAbove) && isPassable(level, x, y + 2, z)) {
+            aboveOK = true;
+        }
 
-        return true;
+        // 脚下必须有实体碰撞支撑（空气/花草/水等无碰撞的方块不能立足）
+        if (stateBelow.getCollisionShape(level, below).isEmpty()) return false;
+
+        return posOK && aboveOK;
+    }
+
+    /**
+     * 判断方块是否为"低矮方块"（玩家踩上去不占完整一格高度的方块）。
+     * 包括：底层半砖、下半楼梯、地毯、雪层等。
+     */
+    private static boolean isLowBlock(BlockState state) {
+        if (state.getBlock() instanceof SlabBlock) {
+            return state.getValue(SlabBlock.TYPE) == SlabType.BOTTOM;
+        }
+        if (state.getBlock() instanceof StairBlock) {
+            return state.getValue(StairBlock.HALF) == Half.BOTTOM;
+        }
+        return false;
+    }
+
+    /**
+     * 判断 (x,y,z) 的方块是否形成可踩踏的台阶（站在上面能自然走高 1 格）。
+     * 典型场景：下半楼梯——玩家站在楼梯块上时脚底 Y 实际上是 y，
+     * 头顶是 y+1（仍需空间），但视觉上只需要 1 格站立空间。
+     */
+    private static boolean isStairStep(Level level, int x, int y, int z) {
+        BlockState state = level.getBlockState(new BlockPos(x, y, z));
+        if (state.getBlock() instanceof StairBlock && state.getValue(StairBlock.HALF) == Half.BOTTOM) {
+            // 楼梯上方必须有至少 1 格空间供玩家站立
+            return isPassable(level, x, y + 1, z);
+        }
+        return false;
     }
 
     /** 判断 (x, y, z) 是否可以自由穿过（不碰撞） */
