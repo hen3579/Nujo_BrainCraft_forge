@@ -78,6 +78,8 @@ public class ClientEventHandler {
     public static final KeyMapping TOGGLE_THIRD_PERSON_FRONT = createKeyMapping("toggle_third_person_front", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_THIRD_PERSON_BACK = createKeyMapping("toggle_third_person_back", InputConstants.UNKNOWN.getValue());
     public static final KeyMapping TOGGLE_SECTION_VIEW = createKeyMapping("toggle_section_view", GLFW.GLFW_KEY_PERIOD);
+    public static final KeyMapping CAMERA_ROTATE_LEFT  = createKeyMapping("camera_rotate_left",  GLFW.GLFW_KEY_LEFT_BRACKET);
+    public static final KeyMapping CAMERA_ROTATE_RIGHT = createKeyMapping("camera_rotate_right", GLFW.GLFW_KEY_RIGHT_BRACKET);
 
     /** 每 tick 标记：MouseButton.Pre 是否已消费了左键远程攻击（防止 consumeClick 双重触发） */
     private static boolean rangedAttackConsumedThisTick = false;
@@ -188,6 +190,16 @@ public class ClientEventHandler {
                     : "§7[剖视图] §a恢复自动检测"),
                 true
             );
+        }
+
+        // 鸟瞰模式：[ / ] 键旋转相机朝向（每次 ±45°）
+        if (BirdviewClientEvent.isBirdseyeActive()) {
+            if (CAMERA_ROTATE_LEFT.consumeClick()) {
+                BirdviewClientEvent.rotateCameraYaw(45.0);
+            }
+            if (CAMERA_ROTATE_RIGHT.consumeClick()) {
+                BirdviewClientEvent.rotateCameraYaw(-45.0);
+            }
         }
 
         // 鸟瞰模式：WASD 按下时立即清除寻路路径，再设置 yaw 对齐 + 平视

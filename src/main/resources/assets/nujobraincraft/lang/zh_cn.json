@@ -194,5 +194,7 @@
   "key.nujobraincraft.toggle_first_person": "切换第一人称",
   "key.nujobraincraft.toggle_third_person_back": "切换第三人称（后）",
   "key.nujobraincraft.toggle_third_person_front": "切换第三人称（前）",
-  "key.nujobraincraft.toggle_section_view": "切换剖视图开关"
+  "key.nujobraincraft.toggle_section_view": "切换剖视图开关",
+  "key.nujobraincraft.camera_rotate_left": "鸟瞰相机左转",
+  "key.nujobraincraft.camera_rotate_right": "鸟瞰相机右转"
 }

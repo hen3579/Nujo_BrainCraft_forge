@@ -136,6 +136,8 @@ public class NujoBraincraft
             event.register(ClientEventHandler.TOGGLE_THIRD_PERSON_FRONT);
             event.register(ClientEventHandler.TOGGLE_THIRD_PERSON_BACK);
             event.register(ClientEventHandler.TOGGLE_SECTION_VIEW);
+            event.register(ClientEventHandler.CAMERA_ROTATE_LEFT);
+            event.register(ClientEventHandler.CAMERA_ROTATE_RIGHT);
         }
 
         @SubscribeEvent

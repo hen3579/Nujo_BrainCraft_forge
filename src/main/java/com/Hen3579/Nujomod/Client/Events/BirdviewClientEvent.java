@@ -485,6 +485,17 @@ public class BirdviewClientEvent {
         return fixedYaw;
     }
 
+    /**
+     * 旋转鸟瞰模式的固定相机朝向。
+     * yaw 钳制在 [0, 360)，保持合法角度范围。
+     *
+     * @param delta 旋转角度增量（正=顺时针/右，负=逆时针/左）
+     */
+    public static void rotateCameraYaw(double delta) {
+        fixedYaw = (fixedYaw + delta) % 360.0;
+        if (fixedYaw < 0) fixedYaw += 360.0;
+    }
+
     // ===== 相机 look-at yaw（用于相机对齐移动） =====
 
     /** 保存当前相机的 look-at yaw */

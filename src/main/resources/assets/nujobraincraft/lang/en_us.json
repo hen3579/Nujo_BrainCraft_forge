@@ -193,5 +193,7 @@
   "key.nujobraincraft.toggle_first_person": "Toggle First Person",
   "key.nujobraincraft.toggle_third_person_back": "Toggle Third Person Back",
   "key.nujobraincraft.toggle_third_person_front": "Toggle Third Person Front",
-  "key.nujobraincraft.toggle_section_view": "Toggle Section View"
+  "key.nujobraincraft.toggle_section_view": "Toggle Section View",
+  "key.nujobraincraft.camera_rotate_left": "Rotate Birdview Left",
+  "key.nujobraincraft.camera_rotate_right": "Rotate Birdview Right"
 }
