@@ -21,11 +21,11 @@ public class OrthoviewClientEvent {
     // ========== 缩放 ==========
 
     /** 默认 zoom：10 × 2 = 20 格垂直可见 */
-    public static final double ZOOM_DEFAULT = 10.0;
-    public static final double ZOOM_MIN = 3.0;
-    public static final double ZOOM_MAX = 25.0;
+    public static double ZOOM_DEFAULT = 10.0;
+    public static double ZOOM_MIN = 3.0;
+    public static double ZOOM_MAX = 25.0;
     /** 每格滚轮的缩放步进 */
-    public static final double ZOOM_STEP = 3.0;
+    public static double ZOOM_STEP = 3.0;
 
     private static double zoom = ZOOM_DEFAULT;
 
@@ -86,7 +86,7 @@ public class OrthoviewClientEvent {
     // ========== 右键点击标记痕迹 ==========
 
     /** 标记持续时间（毫秒） */
-    private static final long MARKER_DURATION_MS = 1000;
+    public static long MARKER_DURATION_MS = 1000;
 
     /** 单次标记的数据 */
     public static class ClickMarker {

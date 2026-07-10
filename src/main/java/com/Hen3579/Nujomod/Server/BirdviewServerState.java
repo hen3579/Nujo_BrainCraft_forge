@@ -25,8 +25,8 @@ public class BirdviewServerState {
     private static final Map<UUID, Integer> diveCooldowns = new ConcurrentHashMap<>();
 
     /** 鸟瞰有效范围（格） */
-    private static final double BIRDVIEW_RANGE = 64.0;
-    private static final double BIRDVIEW_RANGE_SQ = BIRDVIEW_RANGE * BIRDVIEW_RANGE;
+    public static double BIRDVIEW_RANGE = 64.0;
+    public static double BIRDVIEW_RANGE_SQ = 4096.0;
 
     // ===== 鸟瞰状态 =====
 
@@ -114,7 +114,7 @@ public class BirdviewServerState {
     // ===== 俯冲冷却管理 =====
 
     /** 俯冲持续时间（tick）：2 秒内允许低于 yMin 俯冲攻击 */
-    public static final int DIVE_DURATION = 40;
+    public static int DIVE_DURATION = 40;
 
     /**
      * 开始/刷新某飞行生物的俯冲冷却。

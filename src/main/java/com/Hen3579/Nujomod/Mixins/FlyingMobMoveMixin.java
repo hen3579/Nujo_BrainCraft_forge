@@ -2,6 +2,7 @@ package com.Hen3579.Nujomod.Mixins;
 
 import com.Hen3579.Nujomod.Server.BirdviewServerState;
 import com.Hen3579.Nujomod.Server.FlyingMobRegistry;
+import com.Hen3579.Nujomod.Config.Config;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
@@ -27,6 +28,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Entity.class)
 public abstract class FlyingMobMoveMixin {
 
+    /** 飞行生物 Y 轴约束常量（由 Config 烘焙） */
+    public static int Y_MIN_OFFSET = 1;
+    public static int Y_MAX_OFFSET = 5;
+
     @Inject(method = "move", at = @At("RETURN"))
     private void nujo$clampFlyingMobY(MoverType type, Vec3 pos, CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
@@ -40,8 +45,8 @@ public abstract class FlyingMobMoveMixin {
 
         // ===== 计算约束区间 =====
         double playerHeadY = birdviewPlayer.getY() + birdviewPlayer.getEyeHeight();
-        double yMin = playerHeadY + 1;          // 最低安全高度（玩家头顶 +1）
-        double yMax = playerHeadY + 5;          // 最高允许高度（玩家头顶 +5）
+        double yMin = playerHeadY + Y_MIN_OFFSET;  // 最低安全高度（玩家头顶 + offset）
+        double yMax = playerHeadY + Y_MAX_OFFSET;  // 最高允许高度（玩家头顶 + offset）
         double diveFloor = playerHeadY;         // 俯冲下限（玩家头部平齐）
 
         // 绝对高度缓冲：最低离地 1 格
