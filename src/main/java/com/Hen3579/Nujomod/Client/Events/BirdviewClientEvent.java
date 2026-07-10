@@ -27,10 +27,10 @@ public class BirdviewClientEvent {
     private static boolean birdseyeActive = false;
 
     /** 鸟瞰视角高度（玩家上方格数） */
-    public static final double BIRDSEYE_HEIGHT = 10.0;
+    public static double BIRDSEYE_HEIGHT = 10.0;
 
     /** 鸟瞰视角俯仰角（0=平视, 90=垂直向下），RTS 风格约 45°（参考 Reign of Nether） */
-    public static final float BIRDSEYE_PITCH = 45.0F;
+    public static float BIRDSEYE_PITCH = 45.0F;
 
     // ===== 建筑遮挡自适应高度 =====
 
@@ -43,16 +43,16 @@ public class BirdviewClientEvent {
     private static boolean canSeeSky = true;
 
     /** 高度平滑插值速度（每 tick lerp 因子，约 0.3 秒到达目标） */
-    private static final double HEIGHT_LERP_SPEED = 0.15;
+    public static double HEIGHT_LERP_SPEED = 0.15;
     /** 发现天花板后，相机下压到天花板以下的安全距离（格数） */
-    private static final double CEILING_CLEARANCE = 0.6;
+    public static double CEILING_CLEARANCE = 0.6;
 
     /** 天花板过低时相机的最小水平偏移距离（格），防止室内贴脸 */
-    private static final double MIN_HORIZONTAL_OFFSET = 5.0;
+    public static double MIN_HORIZONTAL_OFFSET = 5.0;
     /** 最小水平偏移对应的相机高度（MIN_OFFSET × tan(pitch)，pitch=45°时=5.0） */
-    private static final double MIN_HEIGHT = MIN_HORIZONTAL_OFFSET * Math.tan(Math.toRadians(BIRDSEYE_PITCH));
+    public static double MIN_HEIGHT = 5.0; // 由 bakeConfig 根据 MIN_HORIZONTAL_OFFSET 和 BIRDSEYE_PITCH 计算
     /** 相机→玩家线段多点列扫描采样数（覆盖天花板和墙壁） */
-    private static final int SCAN_COLUMNS = 7;
+    public static int SCAN_COLUMNS = 7;
 
     /**
      * 扫描相机→玩家视线路径上的遮挡方块。
@@ -149,7 +149,7 @@ public class BirdviewClientEvent {
     }
 
     /** 射线墙壁检测步长（格） */
-    private static final double RAY_STEP = 0.5;
+    public static double RAY_STEP = 0.5;
 
     /** 每 tick 调用：当前高度向目标高度平滑插值 */
     public static void updateOcclusionSmoothing() {
@@ -215,11 +215,11 @@ public class BirdviewClientEvent {
     /** 目标推离偏移量（射线检测后设定） */
     private static Vec3 targetPushOffset = Vec3.ZERO;
     /** 推离平滑插值速度（略快于高度平滑，因为需要及时避开墙面） */
-    private static final double PUSH_LERP_SPEED = 0.25;
+    public static double PUSH_LERP_SPEED = 0.25;
     /** 射线检测长度（格），检测此范围内是否有墙壁 */
-    private static final double WALL_RAY_LENGTH = 2.5;
+    public static double WALL_RAY_LENGTH = 2.5;
     /** 相机希望与墙壁保持的安全距离（格） */
-    private static final double SAFE_DISTANCE = 1.8;
+    public static double SAFE_DISTANCE = 1.8;
 
     /**
      * 六方向射线检测墙面距离，计算推离向量。
@@ -472,7 +472,7 @@ public class BirdviewClientEvent {
     // ===== 固定相机朝向 =====
 
     /** 鸟瞰模式固定相机朝向（Reign of Nether 风格，NE 135° 对角线视角） */
-    public static final double DEFAULT_FIXED_YAW = 135.0;
+    public static double DEFAULT_FIXED_YAW = 135.0;
 
     /** 进入鸟瞰模式时锁定相机朝向（固定为 135° NE 方向，参考 Reign of Nether） */
     public static void onEnterBirdseye(double playerYaw) {

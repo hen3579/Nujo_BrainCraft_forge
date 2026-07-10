@@ -48,22 +48,22 @@ public class SectionViewCuller {
     // ===== 参数常量 =====
 
     /** 默认屋顶偏移量（回退用，动态检测失败时使用） */
-    private static final int DEFAULT_ROOF_OFFSET = 2;
+    public static int DEFAULT_ROOF_OFFSET = 2;
 
     /** 天花板检测：每层至少需要的固体方块数（3×3=9 中 ≥3） */
-    private static final int CEILING_SOLID_THRESHOLD = 3;
+    public static int CEILING_SOLID_THRESHOLD = 3;
 
     /** 裁剪平面缓冲量（格），防止紧贴平面的方块闪烁 */
-    private static final double PLANE_BUFFER = 0.75;
+    public static double PLANE_BUFFER = 0.75;
 
     /** 封闭空间检测：头顶检测最大距离（格） */
-    private static final int DETECT_CEILING_RANGE = 6;
+    public static int DETECT_CEILING_RANGE = 6;
 
     /** 封闭空间检测：水平墙壁检测最大距离（格） */
-    private static final int DETECT_WALL_RANGE = 6;
+    public static int DETECT_WALL_RANGE = 6;
 
     /** 封闭空间判定：需要的最少被阻挡方向数（上 + 东西南北 + 四角 = 9，≥4 即激活） */
-    private static final int MIN_BLOCKED_DIRS = 4;
+    public static int MIN_BLOCKED_DIRS = 4;
 
     /** 天花板检测 3×3 网格偏移（以玩家为中心的 9 个采样柱） */
     private static final int[][] CEILING_GRID = {
@@ -96,7 +96,7 @@ public class SectionViewCuller {
     private static int tickCounter = 0;
 
     /** 封闭空间检测间隔（tick），约 0.5s 重检一次 */
-    private static final int DETECT_INTERVAL = 10;
+    public static int DETECT_INTERVAL = 10;
 
     /** 手动覆盖标志：true = 用户手动关闭剖视图，忽略自动检测结果 */
     private static boolean manualOverride = false;

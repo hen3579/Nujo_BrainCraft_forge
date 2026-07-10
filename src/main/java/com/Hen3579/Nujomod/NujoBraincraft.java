@@ -2,6 +2,7 @@ package com.Hen3579.Nujomod;
 
 import com.Hen3579.Nujomod.Client.Events.BirdviewCursorOverlay;
 import com.Hen3579.Nujomod.Client.Events.ClientEventHandler;
+import com.Hen3579.Nujomod.Config.Config;
 import com.Hen3579.Nujomod.Inits.*;
 import com.Hen3579.Nujomod.Network.BirdviewNetwork;
 import com.Hen3579.Nujomod.Story.StoryCapabilityRegistration;
@@ -21,7 +22,9 @@ import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -38,6 +41,10 @@ public class NujoBraincraft
     private static final Logger LOGGER = LogUtils.getLogger();
     public NujoBraincraft()
     {
+        // ===== 注册配置系统 =====
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, Config.CLIENT_SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.SERVER, Config.SERVER_SPEC);
+
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
         // 在 mod 主类的 FMLClientSetupEvent 或类似客户端初始化方法中注册
         FMLJavaModLoadingContext.get().getModEventBus().addListener((RenderLevelStageEvent.RegisterStageEvent event) -> {

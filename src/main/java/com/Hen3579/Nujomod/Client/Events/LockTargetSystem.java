@@ -34,13 +34,13 @@ import java.util.function.Predicate;
 public class LockTargetSystem {
 
     /** 锁定搜索范围（方块距离） */
-    public static final double SEARCH_RANGE = 64.0;
+    public static double SEARCH_RANGE = 64.0;
 
     /** 近战攻击距离阈值 */
-    public static final double MELEE_RANGE = 4.0;
+    public static double MELEE_RANGE = 4.0;
 
     /** 自动近战攻击的冷却刻数（10 ticks = 0.5 秒） */
-    private static final int MELEE_COOLDOWN_TICKS = 10;
+    public static int MELEE_COOLDOWN_TICKS = 10;
 
     @Nullable
     private static Entity lockedTarget = null;
@@ -299,11 +299,11 @@ public class LockTargetSystem {
     private static int bowChargeTicks = 0;
 
     /** 弓达到此刻数后自动释放（10 tick = 0.5 秒，power = 0.5 / 箭速 1.5 blocks/tick） */
-    private static final int BOW_CHARGE_TICKS_NEEDED = 10;
+    public static int BOW_CHARGE_TICKS_NEEDED = 10;
 
     /** 远程攻击全局冷却刻数（防止连射滥发） */
     private static int globalRangedCooldownTicks = 0;
-    private static final int GLOBAL_RANGED_COOLDOWN_TICKS = 5; // 0.25s
+    public static int GLOBAL_RANGED_COOLDOWN_TICKS = 5; // 0.25s
 
     /**
      * 弓释放当 tick 是否跳过 pitch 重置。

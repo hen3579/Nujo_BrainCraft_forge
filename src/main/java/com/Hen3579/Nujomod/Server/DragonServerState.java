@@ -121,73 +121,65 @@ public class DragonServerState {
     // ===== 锁定参数 =====
 
     /** 阶段 A/B 的锁定高度（高于柱顶 Y=73，避免穿模） */
-    public static final double PHASE_AB_Y = 74.0;
+    public static double PHASE_AB_Y = 74.0;
 
     /** 阶段 C 的锁定高度（低空但高于地面 Y=63） */
-    public static final double PHASE_C_Y = 68.0;
+    public static double PHASE_C_Y = 68.0;
 
     /** 允许的高度偏差 */
-    public static final double Y_TOLERANCE = 1.0;
+    public static double Y_TOLERANCE = 1.0;
 
     /** 祭坛中心 */
-    public static final double CENTER_X = 0.0;
-    public static final double CENTER_Z = 0.0;
+    public static double CENTER_X = 0.0;
+    public static double CENTER_Z = 0.0;
 
     /** 最大活动半径（格） */
-    public static final double MAX_RANGE = 30.0;
-    public static final double MAX_RANGE_SQ = MAX_RANGE * MAX_RANGE;
+    public static double MAX_RANGE = 30.0;
+    public static double MAX_RANGE_SQ = 900.0;
 
     /** 拉回速度 */
-    public static final double PULL_BACK_SPEED = 2.0;
-
-    /** Y 轴强制归零速度阈值 */
-    public static final double Y_VELOCITY_THRESHOLD = 0.01;
+    public static double PULL_BACK_SPEED = 2.0;
 
     // ===== 移动速度常量 =====
-    public static final double SPEED_PATROL = 2.5;
-    public static final double SPEED_CIRCLE = 3.5;
-    public static final double SPEED_CHARGE = 6.0;
-    public static final double SPEED_RAGE = 3.5;
+    public static double SPEED_PATROL = 2.5;
+    public static double SPEED_CIRCLE = 3.5;
+    public static double SPEED_CHARGE = 6.0;
 
     // ===== 巡逻参数 =====
-    public static final double PATROL_RADIUS = 25.0;
-    public static final int PATROL_SWITCH_INTERVAL = 200; // 10秒
-
-    // ===== 环绕玩家参数 =====
-    public static final double CIRCLE_MIN_RADIUS = 15.0;
-    public static final double CIRCLE_MAX_RADIUS = 20.0;
+    public static double PATROL_RADIUS = 25.0;
+    public static int PATROL_SWITCH_INTERVAL = 200; // 10秒
 
     // ===== 冷却时间（tick, 20tick=1秒） =====
-    public static final int CD_FIREBALL_A = 80;      // 4秒
-    public static final int CD_FIREBALL_B = 60;      // 3秒
-    public static final int CD_CHARGE = 100;         // 5秒
-    public static final int CD_BREATH = 80;          // 4秒
-    public static final int CD_AOE = 120;            // 6秒
-    public static final int CD_CLOSE_BREATH = 100;   // 5秒
-    public static final int CD_HEAL_LOCKOUT = 200;   // 10秒
-    public static final int CD_TARGET_SWITCH = 100;  // 5秒目标防抖
+    public static int CD_FIREBALL_A = 80;      // 4秒
+    public static int CD_FIREBALL_B = 60;      // 3秒
+    public static int CD_CHARGE = 100;         // 5秒
+    public static int CD_BREATH = 80;          // 4秒
+    public static int CD_AOE = 120;            // 6秒
 
     // ===== C3 终极技能参数 =====
-    public static final int CD_METEOR = 200;         // 流星雨冷却 10 秒
-    public static final int CD_SHOCKWAVE = 160;       // 冲击波冷却 8 秒
-    public static final int CD_ULTIMATE_TRIGGER = 120; // C2 → C3 触发间隔 6 秒
-    public static final int C3_SKILL_DURATION = 100;  // C3 技能持续 5 秒
-    public static final double RING_AOE_MAX_RADIUS = 12.0; // 环形 AOE 最大半径
-    public static final double SHOCKWAVE_MAX_RADIUS = 15.0; // 冲击波最大半径
+    public static int CD_METEOR = 200;         // 流星雨冷却 10 秒
+    public static int CD_SHOCKWAVE = 160;       // 冲击波冷却 8 秒
+    public static int CD_ULTIMATE_TRIGGER = 120; // C2 → C3 触发间隔 6 秒
+    public static int C3_SKILL_DURATION = 100;  // C3 技能持续 5 秒
+    public static double RING_AOE_MAX_RADIUS = 12.0; // 环形 AOE 最大半径
+    public static double SHOCKWAVE_MAX_RADIUS = 15.0; // 冲击波最大半径
 
     // ===== 阶段转换阈值 =====
-    public static final double PHASE_C_HP_THRESHOLD = 0.5; // 50% HP
-    public static final double A3_HEAL_HP_THRESHOLD = 0.8; // 80% HP
-    public static final double A3_HEAL_RATE = 0.02;        // 2%/s = 0.1%/tick
+    public static double PHASE_C_HP_THRESHOLD = 0.5; // 50% HP
+    public static double A3_HEAL_HP_THRESHOLD = 0.8; // 80% HP
+    public static double A3_HEAL_RATE = 0.02;        // 2%/s = 0.1%/tick
 
     // ===== 距离阈值 =====
-    public static final double PROTECT_CRYSTAL_RANGE = 10.0;
-    public static final double CHARGE_MIN_RANGE = 10.0;
-    public static final double CHARGE_MAX_RANGE = 30.0;
-    public static final double BREATH_RANGE = 10.0;
-    public static final double AOE_RADIUS = 8.0;
-    public static final int CHARGE_DURATION = 30;     // 1.5秒
-    public static final int LANDING_DURATION = 40;    // 2秒
+    public static double PROTECT_CRYSTAL_RANGE = 10.0;
+    public static double CHARGE_MIN_RANGE = 10.0;
+    public static double CHARGE_MAX_RANGE = 30.0;
+    public static double BREATH_RANGE = 10.0;
+    public static double AOE_RADIUS = 8.0;
+    public static int CD_CLOSE_BREATH = 100;
+    public static int CD_HEAL_LOCKOUT = 200;
+    public static int CD_TARGET_SWITCH = 100;
+    public static int CHARGE_DURATION = 30;     // 1.5秒
+    public static int LANDING_DURATION = 40;    // 2秒
 
     // ===== 状态管理 =====
 
