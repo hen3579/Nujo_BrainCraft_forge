@@ -179,15 +179,15 @@ public class ClientEventHandler {
             }
         }
 
-        // 鸟瞰模式：V 键切换剖视图手动覆盖开关
+        // 鸟瞰模式：V 键切换剖视图手动开关
         // 实际状态更新与区块重建在 handleEndPhase 中完成，避免 active 未更新就触发重编
         if (BirdviewClientEvent.isBirdseyeActive() && TOGGLE_SECTION_VIEW.consumeClick()) {
-            SectionViewCuller.toggleManualOverride();
-            boolean overridden = SectionViewCuller.isManuallyOverridden();
+            SectionViewCuller.toggleManualEnable();
+            boolean enabled = SectionViewCuller.isManuallyEnabled();
             mc.player.displayClientMessage(
-                Component.literal(overridden
-                    ? "§7[剖视图] §c已手动关闭"
-                    : "§7[剖视图] §a恢复自动检测"),
+                Component.literal(enabled
+                    ? "§7[剖视图] §a已开启"
+                    : "§7[剖视图] §c已关闭"),
                 true
             );
         }
@@ -809,6 +809,8 @@ public class ClientEventHandler {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         if (!BirdviewClientEvent.isBirdseyeActive()) return;
+        // 剖视图未手动开启时不显示状态文本
+        if (!SectionViewCuller.isManuallyEnabled()) return;
 
         var font = mc.font;
         int x = 5;
@@ -817,10 +819,9 @@ public class ClientEventHandler {
 
         // 剖视图状态
         boolean active = SectionViewCuller.isActive();
-        boolean overridden = SectionViewCuller.isManuallyOverridden();
         String sectionStatus = active
             ? "§a激活"
-            : (overridden ? "§c已手动关闭" : "§7未激活");
+            : "§7未激活";
         event.getGuiGraphics().drawString(font,
             "§f剖视图: " + sectionStatus + "  §8(yOff=" + SectionViewCuller.getDynamicRoofOffset() + ")",
             x, y, 0xFFFFFFFF);

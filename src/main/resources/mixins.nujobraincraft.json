@@ -16,9 +16,12 @@
   "client": [
     "CameraMixin",
     "OrthoViewMixin",
+    "FrustumMixin",
     "MouseHandlerMixin",
     "FogRendererMixin",
-    "RenderChunkRegionMixin"
+    "RenderChunkRegionMixin",
+    "ModelBlockRendererMixin",
+    "LevelRendererMixin"
   ],
   "server": [],
   "injectors": {

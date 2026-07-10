@@ -2,7 +2,7 @@
   "type": "nujobraincraft:brain_world",
   "generator": {
     "type": "minecraft:noise",
-    "settings": "minecraft:overworld",
+    "settings": "nujobraincraft:brain_world_flat",
     "biome_source": {
       "type": "minecraft:multi_noise",
       "preset": "minecraft:overworld"

@@ -98,10 +98,10 @@ public class SectionViewCuller {
     /** 封闭空间检测间隔（tick），约 0.5s 重检一次 */
     private static final int DETECT_INTERVAL = 10;
 
-    /** 手动覆盖标志：true = 用户手动关闭剖视图，忽略自动检测结果 */
-    private static boolean manualOverride = false;
+    /** 手动开启标志：false（默认）= 剖视图关闭，true = 用户手动开启后进行自动检测 */
+    private static boolean manualEnable = false;
 
-    /** 强制下次 update 立即执行检测（手动覆盖切换后需要即时响应） */
+    /** 强制下次 update 立即执行检测（手动开启切换后需要即时响应） */
     private static boolean forceDetectNextTick = false;
 
     // ===== 每 tick 更新入口 =====
@@ -130,9 +130,9 @@ public class SectionViewCuller {
         // === 动态天花板高度检测 ===
         dynamicRoofOffset = detectCeilingHeight(level, BlockPos.containing(playerPos));
 
-        // 条件：鸟瞰模式 + 未手动覆盖 + 封闭空间检测通过 → 激活剖视图
+        // 条件：鸟瞰模式 + 手动开启 + 封闭空间检测通过 → 激活剖视图
         boolean newActive = BirdviewClientEvent.isBirdseyeActive()
-                && !manualOverride
+                && manualEnable
                 && detectEnclosedSpace(level, playerPos);
 
         if (newActive != active) {
@@ -151,20 +151,20 @@ public class SectionViewCuller {
         active = false;
         wasActive = false;
         tickCounter = 0;
-        manualOverride = false;
+        manualEnable = false;
         forceDetectNextTick = false;
     }
 
-    /** 切换手动覆盖模式（快捷键触发）。仅在鸟瞰模式下有效。 */
-    public static void toggleManualOverride() {
-        manualOverride = !manualOverride;
+    /** 切换手动开启模式（快捷键触发）。仅在鸟瞰模式下有效。 */
+    public static void toggleManualEnable() {
+        manualEnable = !manualEnable;
         forceDetectNextTick = true; // 强制下一 tick 立即更新 active
-        LOGGER.info("剖视图手动覆盖: {}", manualOverride ? "强制关闭" : "恢复自动检测");
+        LOGGER.info("剖视图手动开关: {}", manualEnable ? "开启" : "关闭");
     }
 
-    /** 手动覆盖是否激活（即用户手动关闭了剖视图） */
-    public static boolean isManuallyOverridden() {
-        return manualOverride;
+    /** 手动开启是否激活（即用户手动开启了剖视图） */
+    public static boolean isManuallyEnabled() {
+        return manualEnable;
     }
 
     /** 剖视图是否当前激活 */

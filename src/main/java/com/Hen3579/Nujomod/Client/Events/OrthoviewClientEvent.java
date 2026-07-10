@@ -20,10 +20,10 @@ public class OrthoviewClientEvent {
 
     // ========== 缩放 ==========
 
-    /** 默认 zoom：10 × 2 = 20 格垂直可见 */
-    public static final double ZOOM_DEFAULT = 10.0;
-    public static final double ZOOM_MIN = 3.0;
-    public static final double ZOOM_MAX = 25.0;
+    /** 默认 zoom：30 × 2 = 60 格垂直可见（参考 RoN，避免地形被截断） */
+    public static final double ZOOM_DEFAULT = 30.0;
+    public static final double ZOOM_MIN = 10.0;
+    public static final double ZOOM_MAX = 60.0;
     /** 每格滚轮的缩放步进 */
     public static final double ZOOM_STEP = 3.0;
 
@@ -49,37 +49,32 @@ public class OrthoviewClientEvent {
 
     // ========== 正交投影矩阵 ==========
 
-    /** 室外近裁剪面（格），默认 0.1 */
-    private static final float NEAR_PLANE_OUTDOOR = 0.1f;
-    /** 深洞穴近裁剪面（格），推到 3.0 避免切穿岩壁 */
-    private static final float NEAR_PLANE_CAVE = 3.0f;
-    /** 远裁剪面，固定 1000 格 */
-    private static final float FAR_PLANE = 1000.0f;
+    /** 参考 RoN：近裁剪面推到相机后方 3000 格，彻底消除近处裁剪 */
+    private static final float NEAR_PLANE = -3000.0f;
+    /** 远裁剪面，固定 3000 格（与 near 对称，确保覆盖所有地形） */
+    private static final float FAR_PLANE = 3000.0f;
 
     /**
      * 计算正交投影矩阵。
-     * 可见范围以 zoom 为半高（block 数），半宽根据屏幕宽高比自动适配。
-     * 近裁剪面在洞穴中自动推远，避免正交投影切穿头顶岩壁露出黑色空洞。
+     * 参考 Reign of Nether 方案：
+     * - 可见范围以 zoom 为半高（block 数），半宽根据屏幕宽高比自动适配
+     * - near=-3000 / far=+3000：近裁剪面在相机后方，彻底消除近处地形/岩壁裁剪
      */
     public static Matrix4f getOrthoMatrix() {
         Minecraft mc = Minecraft.getInstance();
         Window window = mc.getWindow();
         if (window == null) {
-            return new Matrix4f().setOrtho(-30, 30, -30, 30, NEAR_PLANE_OUTDOOR, FAR_PLANE);
+            return new Matrix4f().setOrtho(-30, 30, -30, 30, NEAR_PLANE, FAR_PLANE);
         }
 
         float aspect = (float) window.getWidth() / (float) window.getHeight();
         float halfHeight = (float) zoom;
         float halfWidth = halfHeight * aspect;
 
-        // 动态近裁剪面：洞穴越深，近裁剪面推得越远
-        float caveFactor = BirdviewClientEvent.getCaveFactor();
-        float near = NEAR_PLANE_OUTDOOR + caveFactor * (NEAR_PLANE_CAVE - NEAR_PLANE_OUTDOOR);
-
         return new Matrix4f().setOrtho(
                 -halfWidth, halfWidth,
                 -halfHeight, halfHeight,
-                near, FAR_PLANE
+                NEAR_PLANE, FAR_PLANE
         );
     }
 
