@@ -1,6 +1,7 @@
 package com.Hen3579.Nujomod.Client.Events;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.*;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -26,6 +28,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Predicate;
 
 /**
@@ -41,6 +44,13 @@ public class LockTargetSystem {
 
     /** 自动近战攻击的冷却刻数（10 ticks = 0.5 秒） */
     public static int MELEE_COOLDOWN_TICKS = 10;
+
+    /** 上次发起异步寻路时目标的位置（用于检测目标是否移动了足够远需要重新寻路） */
+    @Nullable
+    private static Vec3 lastPathfindTarget = null;
+
+    /** 重新寻路距离阈值（格），目标移动超过此距离则重新计算路径 */
+    private static final double PATHFIND_RECHASE_THRESHOLD_SQ = 16.0; // 4格²
 
     @Nullable
     private static Entity lockedTarget = null;
@@ -235,6 +245,7 @@ public class LockTargetSystem {
         isChasing = false;
         BirdviewClientEvent.clearMoveTarget();
         meleeCooldownTicks = 0;
+        lastPathfindTarget = null;
     }
 
     /** 每刻追杀逻辑（在 handleEndPhase 中调用） */
@@ -251,7 +262,43 @@ public class LockTargetSystem {
             return;
         }
 
-        BirdviewClientEvent.setMoveTarget(target.position());
+        Vec3 targetPos = target.position();
+        BirdviewClientEvent.setMoveTarget(targetPos);
+
+        // === 自动 A* 寻路：目标移动超过阈值 → 触发异步路径计算 ===
+        boolean shouldPathfind = false;
+        if (lastPathfindTarget == null) {
+            shouldPathfind = true;
+        } else {
+            double distSq = targetPos.distanceToSqr(lastPathfindTarget);
+            if (distSq > PATHFIND_RECHASE_THRESHOLD_SQ) {
+                shouldPathfind = true;
+            }
+        }
+
+        // 卡住时也触发重新寻路
+        if (BirdviewClientEvent.isStuck()) {
+            shouldPathfind = true;
+            BirdviewClientEvent.resetStuckDetection();
+        }
+
+        if (shouldPathfind && isChasing && isLocked()) {
+            lastPathfindTarget = targetPos;
+            double directDist = mc.player.position().distanceTo(targetPos);
+            if (directDist >= 3.0) {
+                BlockPos startBlock = mc.player.blockPosition();
+                BlockPos targetBlock = new BlockPos(
+                    (int) Math.floor(targetPos.x),
+                    (int) Math.floor(targetPos.y),
+                    (int) Math.floor(targetPos.z)
+                );
+                Level levelRef = mc.level;
+                BirdviewClientEvent.submitAsyncPath(
+                    CompletableFuture.supplyAsync(() -> AStarPathfinder.findPath(levelRef, startBlock, targetBlock, 3000, 0))
+                );
+            }
+        }
+
         double dist = mc.player.distanceTo(target);
 
         if (dist <= MELEE_RANGE && --meleeCooldownTicks <= 0) {
