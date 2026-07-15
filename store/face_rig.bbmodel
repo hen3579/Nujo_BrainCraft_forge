@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "format_version": "4.5",
+    "model_format": "bedrock"
+  },
+  "variables": [
+    {
+      "name": "eye_open",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "value": 1
+    },
+    {
+      "name": "brow_up",
+      "type": "float",
+      "min": -1,
+      "max": 1,
+      "value": 0
+    },
+    {
+      "name": "mouth_open",
+      "type": "float",
+      "min": 0,
+      "max": 1,
+      "value": 0
+    },
+    {
+      "name": "mouth_smile",
+      "type": "float",
+      "min": -1,
+      "max": 1,
+      "value": 0
+    }
+  ],
+  "animations": [
+    {
+      "name": "Idle_Expressions",
+      "length": 40,
+      "loop": true,
+      "keyframes": {
+        "variables": [
+          {
+            "time": 0,
+            "values": {
+              "eye_open": 1,
+              "brow_up": 0,
+              "mouth_open": 0,
+              "mouth_smile": 0
+            }
+          },
+          {
+            "time": 10,
+            "values": {
+              "mouth_smile": 1
+            }
+          },
+          {
+            "time": 20,
+            "values": {
+              "eye_open": 1,
+              "mouth_open": 1,
+              "mouth_smile": 0
+            }
+          },
+          {
+            "time": 30,
+            "values": {
+              "brow_up": -1,
+              "mouth_smile": -0.5
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

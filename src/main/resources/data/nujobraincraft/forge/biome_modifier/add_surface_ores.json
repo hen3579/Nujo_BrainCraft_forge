@@ -1,0 +1,10 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#minecraft:is_overworld",
+  "features": [
+    "nujobraincraft:surface_coal_ore",
+    "nujobraincraft:surface_iron_ore",
+    "nujobraincraft:surface_gold_ore"
+  ],
+  "step": "underground_ores"
+}

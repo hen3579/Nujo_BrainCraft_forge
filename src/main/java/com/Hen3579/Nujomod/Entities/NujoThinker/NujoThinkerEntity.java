@@ -69,10 +69,8 @@ public class NujoThinkerEntity extends PathfinderMob implements GeoEntity {
         }
         return PlayState.STOP;
     }
-    // 需要添加移动状态检测方法（示例）
     private boolean isMoving() {
-        return this.getNavigation().isInProgress()
-                || (this.xxa != 0 || this.zza != 0);
+        return this.getDeltaMovement().horizontalDistanceSqr() > 1.0E-6;
     }
     @Override
     protected void registerGoals() {
