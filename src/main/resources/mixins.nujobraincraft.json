@@ -18,7 +18,9 @@
     "OrthoViewMixin",
     "MouseHandlerMixin",
     "FogRendererMixin",
-    "RenderChunkRegionMixin"
+    "RenderChunkRegionMixin",
+    "FrustumMixin",
+    "LevelRendererMixin"
   ],
   "server": [],
   "injectors": {

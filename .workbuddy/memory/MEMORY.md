@@ -42,19 +42,31 @@
   - 地表矿脉 (surface_ore) 和树木密度调整仍保留
   - 旧方案问题: surface_rule 仅 230 字符(无草地/泥土)、final_density 跳过管线(无洞穴)、线性梯度代替 spline
 
-## 战争迷雾系统 (2026-07-10 建立)
-- `fogofwar/FogOfWarData` — 三层亮度(BRIGHT_VISIBLE=1.0/BRIGHT_DARK=0.35/BRIGHT_UNEXPLORED=0.10), ChunkPos 集合, NBT 持久化
-- `fogofwar/FogOfWarEvents` — @Mod.EventBusSubscriber(client): onClientTick(更新+auto-save), onRenderLivingPre(取消非揭示实体), onWorldLoad/Unload(持久化)
-- `Mixins/ModelBlockRendererMixin` — putQuadData @Inject HEAD 捕获 pPos → ThreadLocal fogBrightness, @ModifyArgs 拦截 putBulkData args[2] brightnesses[] *= fog
-- 持久化: 单人→saves/<world>/nujobraincraft_fog.nbt, 多人→游戏根目录
-- 剧情集成: storyReveal(chunkX, chunkZ, radius) 可强制揭示区域
+## WorldBorder 边界遮罩系统 (2026-07-16 建立)
+- **WorldBorderHandler** (服务端): brain_world 维度加载时设置 WorldBorder, center=(0,0), size=512
+  - 仅在 WorldBorder 未自定义时设置（默认~60M），避免覆盖已保存数据
+  - 无伤害、无红色警告带
+  - `getBrainWorldKey()` 提供维度 ResourceKey 供客户端判断
+  - **地形裙边**: ChunkEvent.Load 监听器，检测靠近 WorldBorder 边缘的区块
+    - SKIRT_WIDTH=8格：WorldBorder 内侧 8 格范围的列
+    - 逐列填充地下空气为石头(y>=0)/深板岩(y<0)，形成从地表到基岩的实心墙体
+    - 快速过滤（整个区块不在裙边区域时跳过），仅填充 AIR 方块
+- **RenderChunkRegionMixin** (客户端): brain_world 鸟瞰模式下，WorldBorder 外方块返回 AIR（硬 cutoff）
+- **FogRendererMixin** (客户端): brain_world 鸟瞰模式下，边界 30 格过渡带距离雾（极暗蓝灰色）
+  - `getBorderFogFactor()` 基于相机到最近边界距离计算雾浓度
+  - 优先级：边界雾 > 剖视图雾 > 洞穴雾
+- **ClientEventHandler** (客户端): 鸟瞰相机位置 clamp 到 WorldBorder 内（留 20 格 margin）
+  - **地下遮挡平面**: AFTER_TRANSLUCENT_BLOCKS 阶段渲染 y=50 黑色不透明平面（半径300格）
+    - 深度测试让地表覆盖平面，地下被平面遮挡
+    - 仅在 brain_world + 鸟瞰模式下激活，不影响第一人称
+- 参考方案: Reign of Nether (RoN) 用 WorldBorder + isWithinBounds 亮度遮罩
 
 ## 编译注意事项
 - Forge 1.20.1 中 EntityType.spawn() 使用 3 参数版本: spawn(ServerLevel, BlockPos, MobSpawnType)
 - 维度 ResourceKey 使用 Registries.DIMENSION (不是 Registry.DIMENSION_REGISTRY)
 - NbtAccounter.unlimitedHeap() 不存在，直接用 buf.readNbt()
 - registerMessage 使用 5 参数版本（不带 NetworkDirection）
-- getRegistryName() 已移除，用 BuiltInRegistries.getKey() 替代
+- Forge 1.20.1 中 WorldBorder API: `setDamagePerBlock(double)` 和 `setDamageSafeZone(double)`，不存在 `setDamageAmount(int)`
 
 ## 世界平坦化注意事项 (2026-07-10)
 - **核心思路**: 不要重写 noise_settings，而是复制原版 overworld.json 然后只覆盖 offset/factor 两个密度函数

@@ -1,10 +1,12 @@
 package com.Hen3579.Nujomod.Client.Events;
 
+import com.Hen3579.Nujomod.Client.GameMode.GameModeManager;
 import com.Hen3579.Nujomod.Client.gui.Menu.Screen.CustomMainMenuScreen;
 import com.Hen3579.Nujomod.Client.Utils.CameraAccess;
 import com.Hen3579.Nujomod.Network.BirdviewNetwork;
 import com.Hen3579.Nujomod.Network.BirdviewStatePacket;
 import com.Hen3579.Nujomod.NujoBraincraft;
+import com.Hen3579.Nujomod.Server.WorldBorderHandler;
 import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.platform.Window;
 import com.mojang.blaze3d.systems.RenderSystem;
@@ -51,10 +53,14 @@ import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.client.event.ViewportEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.BufferUploader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -80,9 +86,32 @@ public class ClientEventHandler {
     public static final KeyMapping TOGGLE_SECTION_VIEW = createKeyMapping("toggle_section_view", GLFW.GLFW_KEY_PERIOD);
     public static final KeyMapping CAMERA_ROTATE_LEFT  = createKeyMapping("camera_rotate_left",  GLFW.GLFW_KEY_LEFT_BRACKET);
     public static final KeyMapping CAMERA_ROTATE_RIGHT = createKeyMapping("camera_rotate_right", GLFW.GLFW_KEY_RIGHT_BRACKET);
+    public static final KeyMapping CYCLE_GAME_MODE = createKeyMapping("cycle_game_mode", GLFW.GLFW_KEY_B);
 
     /** 每 tick 标记：MouseButton.Pre 是否已消费了左键远程攻击（防止 consumeClick 双重触发） */
     private static boolean rangedAttackConsumedThisTick = false;
+
+    /** 进入鸟瞰前保存的原版渲染距离，退出时恢复 */
+    private static int originalRenderDistance = 0;
+
+    // ===== 地下遮挡平面参数 =====
+    /**
+     * 遮挡平面 Y 坐标：在此高度以下的所有内容被黑色平面遮挡。
+     *
+     * <p>brain_world 地表约在 y=63（海平面），dirt 层 y=59~62，stone 从 y=58 开始。
+     * 遮挡平面设在 y=50，确保：
+     * <ul>
+     *   <li>地表以上内容（草、树、建筑）完全可见</li>
+     *   <li>dirt 层可见（保持地表自然感）</li>
+     *   <li>stone 层及以下洞穴/虚空被完全遮挡</li>
+     * </ul>
+     *
+     * <p>只在 brain_world + 鸟瞰模式下激活，不影响第一人称地下探索。
+     */
+    private static final double OCCLUSION_PLANE_Y = 50.0;
+
+    /** 遮挡平面半径（格）：从相机位置向四周延伸的平面大小 */
+    private static final double OCCLUSION_PLANE_RADIUS = 300.0;
 
     /**
      * 客户端刻事件：
@@ -117,12 +146,43 @@ public class ClientEventHandler {
                 setupBirdviewGlow(mc);
                 // 通知服务器：鸟瞰模式开启（激活飞行生物 Y 轴约束）
                 BirdviewNetwork.INSTANCE.sendToServer(new BirdviewStatePacket(true));
+
+                // 预编译鸟瞰可见范围内的所有 section：强制标记为脏，立即进入编译队列
+                // 正交投影下可见范围远大于透视投影（半宽≈53格，最大ZOOM_MAX=60时≈107格）
+                // 不预编译则远距离 section 编译优先级低 → 几何数据未就绪 → 显示为"穿透"
+                if (mc.level != null && mc.levelRenderer != null) {
+                    int px = mc.player.blockPosition().getX();
+                    int pz = mc.player.blockPosition().getZ();
+                    // 覆盖 8 个 chunk（128 格）范围，确保 ZOOM_MAX=60 时也完全覆盖
+                    int range = 128;
+                    mc.levelRenderer.setBlocksDirty(
+                        px - range, mc.level.getMinBuildHeight(), pz - range,
+                        px + range, mc.level.getMaxBuildHeight(), pz + range
+                    );
+                    // 触发全量更新：forcedFullRenderChunkUpdate = true，
+                    // 下一帧 setupRender 会走完整的 BFS 遍历（initializeQueueForFullUpdate）
+                    // 配合 LevelRendererMixin 的 nujo$disableRayMarchingCullingInBirdview，
+                    // 确保所有 128 格范围内的 chunk 都被加入渲染队列
+                    mc.levelRenderer.needsUpdate();
+                }
+
+                // 提高渲染距离：正交投影下视口远大于透视投影，
+                // 默认 12 chunk 渲染距离（192 格半径）不足以覆盖 ZOOM_MAX=60 时的可见范围
+                // 16 chunk（256 格半径）提供足够余量，确保视口边缘 chunk 已被加载
+                originalRenderDistance = mc.options.renderDistance().get();
+                mc.options.renderDistance().set(16);
             }
 
             // 退出鸟瞰时：关闭发光描边
             if (prevPerspective == 3 && newPerspective != 3) {
                 clearBirdviewGlow(mc);
                 BirdviewClientEvent.resetOcclusionHeight();
+
+                // 恢复进入鸟瞰时提升的渲染距离
+                if (originalRenderDistance > 0) {
+                    mc.options.renderDistance().set(originalRenderDistance);
+                    originalRenderDistance = 0;
+                }
 
                 // 如果剖视图曾激活，标记附近区块需要重编译以恢复被剔除的方块
                 if (SectionViewCuller.isActive()) {
@@ -179,15 +239,15 @@ public class ClientEventHandler {
             }
         }
 
-        // 鸟瞰模式：V 键切换剖视图手动覆盖开关
+        // 鸟瞰模式：V 键切换剖视图手动启用开关
         // 实际状态更新与区块重建在 handleEndPhase 中完成，避免 active 未更新就触发重编
         if (BirdviewClientEvent.isBirdseyeActive() && TOGGLE_SECTION_VIEW.consumeClick()) {
-            SectionViewCuller.toggleManualOverride();
-            boolean overridden = SectionViewCuller.isManuallyOverridden();
+            SectionViewCuller.toggleManualEnable();
+            boolean enabled = SectionViewCuller.isManuallyEnabled();
             mc.player.displayClientMessage(
-                Component.literal(overridden
-                    ? "§7[剖视图] §c已手动关闭"
-                    : "§7[剖视图] §a恢复自动检测"),
+                Component.literal(enabled
+                    ? "§7[剖视图] §a已开启（自动检测封闭空间）"
+                    : "§7[剖视图] §c已关闭"),
                 true
             );
         }
@@ -212,6 +272,12 @@ public class ClientEventHandler {
                 BirdviewClientEvent.clearMoveTarget();
             }
             applyCameraAlignedInput(mc);
+        }
+
+        // B 键循环切换 HUD 游戏模式
+        if (CYCLE_GAME_MODE.consumeClick()) {
+            com.Hen3579.Nujomod.Client.GameMode.GameModeManager.cycleMode();
+            com.Hen3579.Nujomod.Client.GameMode.GameModeManager.sendModeMessage();
         }
     }
 
@@ -801,6 +867,25 @@ public class ClientEventHandler {
         BirdviewClientEvent.setHoveredHitResult(bestHit);
     }
 
+    // ===== HUD 模式切换：隐藏原版 Hotbar =====
+
+    /**
+     * 在战斗/建造模式下隐藏原版手持物品栏（Hotbar）。
+     * 原版 HUD 在 VanillaGuiOverlay.HOTBAR 阶段渲染，通过取消该事件实现隐藏。
+     */
+    @SubscribeEvent
+    public static void onRenderOverlayPre(RenderGuiOverlayEvent.Pre event) {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null || mc.level == null) return;
+
+        // 仅在战斗/建造模式下隐藏原版 hotbar
+        if (GameModeManager.isCombat() || GameModeManager.isBuild()) {
+            if (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()) {
+                event.setCanceled(true);
+            }
+        }
+    }
+
     // ===== 剖视图调试信息 HUD =====
 
     /** 在屏幕左上角显示剖视图 + 洞穴系数的实时状态，用于排查视觉异常 */
@@ -809,6 +894,8 @@ public class ClientEventHandler {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.level == null) return;
         if (!BirdviewClientEvent.isBirdseyeActive()) return;
+        // 仅在手动画开启剖视图后才显示调试文本
+        if (!SectionViewCuller.isManuallyEnabled()) return;
 
         var font = mc.font;
         int x = 5;
@@ -817,10 +904,10 @@ public class ClientEventHandler {
 
         // 剖视图状态
         boolean active = SectionViewCuller.isActive();
-        boolean overridden = SectionViewCuller.isManuallyOverridden();
+        boolean enabled = SectionViewCuller.isManuallyEnabled();
         String sectionStatus = active
             ? "§a激活"
-            : (overridden ? "§c已手动关闭" : "§7未激活");
+            : "§7未检测到封闭空间";
         event.getGuiGraphics().drawString(font,
             "§f剖视图: " + sectionStatus + "  §8(yOff=" + SectionViewCuller.getDynamicRoofOffset() + ")",
             x, y, 0xFFFFFFFF);
@@ -1127,6 +1214,69 @@ public class ClientEventHandler {
         // 2. 头顶高亮ID标签（已改用 GUI Overlay 渲染，见 BirdviewCursorOverlay）
     }
 
+    // ===== 地下遮挡平面渲染 =====
+
+    /**
+     * 在 brain_world + 鸟瞰模式下，渲染黑色遮挡平面隐藏地下洞穴和虚空。
+     *
+     * <p>原理：在 AFTER_TRANSLUCENT_BLOCKS 阶段渲染一个位于 y=OCCLUSION_PLANE_Y 的
+     * 黑色不透明平面。由于深度测试，地表地形（y>50）会自然覆盖平面，
+     * 而地下内容（洞穴、虚空）被平面遮挡——从鸟瞰视角看，地下完全不可见。
+     *
+     * <p>仅在 brain_world 维度 + 鸟瞰模式激活时渲染，不影响第一人称地下探索。
+     * 平面使用 position_color shader 直接渲染，不需要纹理或混合。
+     */
+    @SubscribeEvent
+    public static void onRenderOcclusionPlane(RenderLevelStageEvent event) {
+        // 阶段：所有方块渲染完毕后（深度缓冲已填入地表数据）
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
+
+        Minecraft mc = Minecraft.getInstance();
+        // 仅在 brain_world + 鸟瞰模式下渲染
+        if (!BirdviewClientEvent.isBirdseyeActive()) return;
+        if (mc.level == null || mc.level.dimension() != WorldBorderHandler.getBrainWorldKey()) return;
+
+        Camera camera = event.getCamera();
+        Vec3 camPos = camera.getPosition();
+        PoseStack poseStack = event.getPoseStack();
+
+        // 相机相对坐标中的平面 Y
+        double planeY = OCCLUSION_PLANE_Y - camPos.y;
+
+        // 确保 depth test 和 depth write 开启
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.depthMask(true);    // 平面写入深度，遮挡地下内容
+        RenderSystem.disableBlend();     // 不透明，无混合
+        RenderSystem.setShader(net.minecraft.client.renderer.GameRenderer::getPositionColorShader);
+
+        poseStack.pushPose();
+        Matrix4f matrix = poseStack.last().pose();
+
+        float radius = (float) OCCLUSION_PLANE_RADIUS;
+        float y = (float) planeY;
+
+        Tesselator tesselator = Tesselator.getInstance();
+        BufferBuilder buffer = tesselator.getBuilder();
+        buffer.begin(com.mojang.blaze3d.vertex.VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+
+        // 黑色不透明平面（四个顶点）
+        // 注意：正交投影下相机朝下看，平面在相机下方
+        // 深度测试确保地表覆盖平面，地下被平面遮挡
+        buffer.vertex(matrix, -radius, y, -radius).color(0, 0, 0, 255).endVertex();
+        buffer.vertex(matrix,  radius, y, -radius).color(0, 0, 0, 255).endVertex();
+        buffer.vertex(matrix,  radius, y,  radius).color(0, 0, 0, 255).endVertex();
+        buffer.vertex(matrix, -radius, y,  radius).color(0, 0, 0, 255).endVertex();
+
+        BufferUploader.drawWithShader(buffer.end());
+
+        poseStack.popPose();
+
+        // 恢复默认渲染状态
+        RenderSystem.enableBlend();
+        RenderSystem.depthMask(false); // 后续 entity/overlay 渲染通常不写深度
+    }
+
     /**
      * 玩家复活时重置为第一人称（避免死在鸟瞰视角下卡住）
      */
@@ -1184,6 +1334,27 @@ public class ClientEventHandler {
         );
 
         ((CameraAccess) camera).nujo$setCameraPosition(cameraPos);
+
+        // === WorldBorder 相机位置 clamp ===
+        // 在 brain_world 维度中，将鸟瞰相机限制在 WorldBorder 内（留 20 格 margin）
+        // 防止相机超出边界看到地下虚空和矿洞
+        if (mc.level != null && mc.level.dimension() == WorldBorderHandler.getBrainWorldKey()) {
+            net.minecraft.world.level.border.WorldBorder wb = mc.level.getWorldBorder();
+            double margin = 20.0;
+            double minX = wb.getMinX() + margin;
+            double maxX = wb.getMaxX() - margin;
+            double minZ = wb.getMinZ() + margin;
+            double maxZ = wb.getMaxZ() - margin;
+
+            double clampedX = Math.max(minX, Math.min(maxX, cameraPos.x));
+            double clampedZ = Math.max(minZ, Math.min(maxZ, cameraPos.z));
+
+            if (clampedX != cameraPos.x || clampedZ != cameraPos.z) {
+                Vec3 clampedPos = new Vec3(clampedX, cameraPos.y, clampedZ);
+                ((CameraAccess) camera).nujo$setCameraPosition(clampedPos);
+                cameraPos = clampedPos;
+            }
+        }
 
         // 计算从相机指向玩家的方向向量 → 自动推导 pitch/yaw（look-at 方式）
         Vec3 target = mc.player.position().add(0, mc.player.getEyeHeight() * 0.5, 0);

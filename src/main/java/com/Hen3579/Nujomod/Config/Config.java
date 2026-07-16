@@ -4,6 +4,7 @@ import com.Hen3579.Nujomod.NujoBraincraft;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.config.ModConfigEvent;
 
 @Mod.EventBusSubscriber(modid = NujoBraincraft.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
@@ -148,25 +149,25 @@ public class Config {
         client.push("ortho").comment("正交投影 & 缩放设置");
         ZOOM_DEFAULT = client
                 .comment("默认缩放值")
-                .defineInRange("zoomDefault", 10.0, 1.0, 50.0);
+                .defineInRange("zoomDefault", 30.0, 1.0, 90.0);
         ZOOM_MIN = client
                 .comment("最小缩放")
-                .defineInRange("zoomMin", 3.0, 1.0, 10.0);
+                .defineInRange("zoomMin", 10.0, 1.0, 30.0);
         ZOOM_MAX = client
                 .comment("最大缩放")
-                .defineInRange("zoomMax", 25.0, 10.0, 100.0);
+                .defineInRange("zoomMax", 60.0, 10.0, 200.0);
         ZOOM_STEP = client
                 .comment("滚轮缩放步进量")
                 .defineInRange("zoomStep", 3.0, 0.5, 10.0);
         NEAR_PLANE_OUTDOOR = client
-                .comment("室外近裁剪面（格）")
-                .defineInRange("nearPlaneOutdoor", 0.1, 0.01, 1.0);
+                .comment("室外近裁剪面（格，-3000 推到相机后方）")
+                .defineInRange("nearPlaneOutdoor", -3000.0, -5000.0, 1.0);
         NEAR_PLANE_CAVE = client
-                .comment("洞穴近裁剪面（格，避免切穿岩壁）")
-                .defineInRange("nearPlaneCave", 3.0, 0.5, 10.0);
+                .comment("洞穴近裁剪面（格，-3000 与室外一致）")
+                .defineInRange("nearPlaneCave", -3000.0, -5000.0, 10.0);
         FAR_PLANE = client
-                .comment("远裁剪面（格）")
-                .defineInRange("farPlane", 1000.0, 100.0, 5000.0);
+                .comment("远裁剪面（格，3000 配合 near=-3000 形成 6000 格宽渲染范围）")
+                .defineInRange("farPlane", 3000.0, 100.0, 5000.0);
         client.pop();
 
         client.push("sectionView").comment("剖视图设置");
@@ -347,7 +348,12 @@ public class Config {
 
     @SubscribeEvent
     public static void onLoad(final ModConfigEvent.Loading event) {
-        bakeConfig();
+        // ModConfigEvent.Loading 对 CLIENT 和 SERVER 配置分别触发。
+        // 只对 SERVER 配置执行烘焙，因为大多数配置值在 SERVER 端。
+        // CLIENT 配置（如缩放）在 ModConfigEvent.Reloading 时也会被处理。
+        if (event.getConfig().getType() == ModConfig.Type.SERVER) {
+            bakeConfig();
+        }
     }
 
     @SubscribeEvent
@@ -440,7 +446,7 @@ public class Config {
         com.Hen3579.Nujomod.Server.BirdviewServerState.BIRDVIEW_RANGE_SQ = BIRDVIEW_RANGE.get() * BIRDVIEW_RANGE.get();
 
         // 飞行生物 Y 偏移
-        com.Hen3579.Nujomod.Mixins.FlyingMobMoveMixin.Y_MIN_OFFSET = FLYING_Y_MIN_OFFSET.get();
-        com.Hen3579.Nujomod.Mixins.FlyingMobMoveMixin.Y_MAX_OFFSET = FLYING_Y_MAX_OFFSET.get();
+        com.Hen3579.Nujomod.Server.FlyingMobConfig.Y_MIN_OFFSET = FLYING_Y_MIN_OFFSET.get();
+        com.Hen3579.Nujomod.Server.FlyingMobConfig.Y_MAX_OFFSET = FLYING_Y_MAX_OFFSET.get();
     }
 }

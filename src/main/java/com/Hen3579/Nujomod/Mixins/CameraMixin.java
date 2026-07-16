@@ -2,6 +2,7 @@ package com.Hen3579.Nujomod.Mixins;
 
 import com.Hen3579.Nujomod.Client.Utils.CameraAccess;
 import net.minecraft.client.Camera;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
@@ -35,9 +36,13 @@ public abstract class CameraMixin implements CameraAccess {
     @Shadow
     private Vector3f left;
 
+    @Shadow
+    private BlockPos.MutableBlockPos blockPosition;
+
     @Override
     public void nujo$setCameraPosition(Vec3 pos) {
         this.position = pos;
+        this.blockPosition.set(pos.x, pos.y, pos.z);
     }
 
     /**

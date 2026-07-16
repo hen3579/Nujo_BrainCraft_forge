@@ -6,6 +6,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.culling.Frustum;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -90,9 +91,19 @@ public class OrthoViewMixin {
     @Inject(method = "renderLevel", at = @At("HEAD"), require = 0)
     private void nujo$onRenderLevelHead(CallbackInfo ci) {
         if (BirdviewClientEvent.isBirdseyeActive()) {
+            // 使用相机位置作为深度排序原点，而非世界原点 (0,0,0)
+            // 世界原点在玩家远离生成点（如 400+ 格）时会导致所有透明方块的
+            // 深度排序完全错误，表现为透明方块穿透/排序错乱
+            Vec3 camPos = BirdviewClientEvent.getCachedCameraPos();
+            float sortX = 0.0f, sortY = 0.0f, sortZ = 0.0f;
+            if (camPos != null) {
+                sortX = (float) camPos.x;
+                sortY = (float) camPos.y;
+                sortZ = (float) camPos.z;
+            }
             RenderSystem.setProjectionMatrix(
                     OrthoviewClientEvent.getOrthoMatrix(),
-                    VertexSorting.byDistance(0.0f, 0.0f, 0.0f)
+                    VertexSorting.byDistance(sortX, sortY, sortZ)
             );
         }
     }

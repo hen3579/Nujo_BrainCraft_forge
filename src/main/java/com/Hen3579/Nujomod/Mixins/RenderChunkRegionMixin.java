@@ -2,10 +2,13 @@ package com.Hen3579.Nujomod.Mixins;
 
 import com.Hen3579.Nujomod.Client.Events.BirdviewClientEvent;
 import com.Hen3579.Nujomod.Client.Events.SectionViewCuller;
+import com.Hen3579.Nujomod.Server.WorldBorderHandler;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.client.renderer.chunk.RenderChunkRegion;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -47,6 +50,20 @@ public class RenderChunkRegionMixin {
     private void nujo$hideSectionViewBlocks(BlockPos pos, CallbackInfoReturnable<BlockState> cir) {
         // 防御性门控：非鸟瞰模式下绝不干预区块编译
         if (!BirdviewClientEvent.isBirdseyeActive()) return;
+
+        // === 优先级 1：WorldBorder 边界隐藏 ===
+        // 在 brain_world 维度中，WorldBorder 外的方块返回为空气，
+        // 防止鸟瞰视角下看到边界外的地下虚空和矿洞。
+        // 边界内的过渡区由 FogRendererMixin 的距离雾处理。
+        if (isInBrainWorld()) {
+            WorldBorder wb = level.getWorldBorder();
+            if (!wb.isWithinBounds(pos)) {
+                cir.setReturnValue(Blocks.AIR.defaultBlockState());
+                return;
+            }
+        }
+
+        // === 优先级 2：剖视图剔除 ===
         if (!SectionViewCuller.isActive() || !SectionViewCuller.shouldCull(pos)) {
             return;
         }
@@ -90,5 +107,15 @@ public class RenderChunkRegionMixin {
                 cir.setReturnValue(Blocks.AIR.defaultBlockState());
             }
         }
+    }
+
+    /**
+     * 判断当前客户端世界是否为 brain_world 维度。
+     * 仅在鸟瞰模式下调用，此时 Minecraft.getInstance().level 应为有效引用。
+     */
+    private static boolean isInBrainWorld() {
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.level == null) return false;
+        return mc.level.dimension() == WorldBorderHandler.getBrainWorldKey();
     }
 }

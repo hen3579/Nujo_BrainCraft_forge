@@ -145,11 +145,18 @@ public class NujoBraincraft
             event.register(ClientEventHandler.TOGGLE_SECTION_VIEW);
             event.register(ClientEventHandler.CAMERA_ROTATE_LEFT);
             event.register(ClientEventHandler.CAMERA_ROTATE_RIGHT);
+            event.register(ClientEventHandler.CYCLE_GAME_MODE);
         }
 
         @SubscribeEvent
         public static void registerGuiOverlays(net.minecraftforge.client.event.RegisterGuiOverlaysEvent event) {
             event.registerAboveAll(BirdviewCursorOverlay.ID.getPath(), new BirdviewCursorOverlay());
+            event.registerAboveAll(com.Hen3579.Nujomod.Client.GameMode.Hud.VanillaHudOverlay.ID.getPath(),
+                    new com.Hen3579.Nujomod.Client.GameMode.Hud.VanillaHudOverlay());
+            event.registerAboveAll(com.Hen3579.Nujomod.Client.GameMode.Hud.CombatHudOverlay.ID.getPath(),
+                    new com.Hen3579.Nujomod.Client.GameMode.Hud.CombatHudOverlay());
+            event.registerAboveAll(com.Hen3579.Nujomod.Client.GameMode.Hud.BuildHudOverlay.ID.getPath(),
+                    new com.Hen3579.Nujomod.Client.GameMode.Hud.BuildHudOverlay());
         }
     }
 }

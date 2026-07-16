@@ -74,6 +74,16 @@ public class BirdviewClientEvent {
      * @return 推荐的无遮挡相机 Y 偏移（玩家脚下到相机的高度）
      */
     public static double calculateOcclusionHeight(Level level, Vec3 playerPos) {
+        // 用当前平滑高度近似相机位置（遮挡检测先用当前值近似，下帧渲染时已平滑到目标值）
+        double approxHeight = currentBirdseyeHeight;
+        double offset = approxHeight / Math.tan(Math.toRadians(BIRDSEYE_PITCH));
+        double yawRad = Math.toRadians(DEFAULT_FIXED_YAW);
+        double camX = playerPos.x - Math.sin(yawRad) * offset;
+        double camZ = playerPos.z + Math.cos(yawRad) * offset;
+        double camY = playerPos.y + approxHeight;
+
+        double bestHeight = BIRDSEYE_HEIGHT; // 最优高度 = 无遮挡时的默认值
+
         // === 露天环境：玩家能看到天空时，不压低相机 ===
         // 侧面山坡/悬崖会被遮挡检测误判为"天花板"，导致相机压到 MIN_HEIGHT，
         // 视野变成陡峭俯冲并出现黑块。只要玩家头顶有天空，就保持默认鸟瞰高度。
@@ -81,14 +91,6 @@ public class BirdviewClientEvent {
             return BIRDSEYE_HEIGHT;
         }
 
-        // 用当前平滑高度近似相机位置（遮挡检测先用当前值近似，下帧渲染时已平滑到目标值）
-        double approxHeight = currentBirdseyeHeight;
-        double offset = approxHeight / Math.tan(Math.toRadians(BIRDSEYE_PITCH));
-        double yawRad = Math.toRadians(DEFAULT_FIXED_YAW);
-        double camX = playerPos.x - Math.sin(yawRad) * offset;
-        double camZ = playerPos.z + Math.cos(yawRad) * offset;
-
-        double bestHeight = BIRDSEYE_HEIGHT; // 最优高度 = 无遮挡时的默认值
         BlockPos.MutableBlockPos mPos = new BlockPos.MutableBlockPos();
 
         // === 第 1 层：多点列扫描（天花板 + 墙壁统一处理） ===
@@ -116,7 +118,6 @@ public class BirdviewClientEvent {
 
         // === 第 2 层：射线步进墙壁检测（填充列采样点之间的缝隙） ===
         double playerEyeY = playerPos.y + 1.62;
-        double camY = playerPos.y + approxHeight;
 
         double dx = playerPos.x - camX;
         double dz = playerPos.z - camZ;
@@ -197,7 +198,6 @@ public class BirdviewClientEvent {
      * 洞穴因子 [0, 1]：衡量相机被天花板压低到了什么程度。
      * 0 = 室外（高度 ≥ 默认 10 格）→ 正常视野
      * 1 = 深洞（高度 ≤ MIN_HEIGHT 5 格）→ 最大洞穴适配
-     *
      * <p>该值被正交投影近裁剪面动态调整和洞穴雾效共用。
      */
     public static float getCaveFactor() {

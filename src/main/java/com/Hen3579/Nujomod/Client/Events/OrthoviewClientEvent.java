@@ -13,17 +13,17 @@ import java.util.List;
  * 鸟瞰模式正交投影和缩放控制。
  * 参考 Reign of Nether 的 RTS 正交投影方案：
  * - 用 OrthoViewMixin 替换 LevelRenderer 的透视投影为正交投影
- * - Zoom 控制可见范围（block 数），默认 30，范围 5–90
+ * - Zoom 控制可见范围（block 数），默认 30，范围 10–60
  * - 右键点击移动的快捷标记痕迹
  */
 public class OrthoviewClientEvent {
 
     // ========== 缩放 ==========
 
-    /** 默认 zoom：10 × 2 = 20 格垂直可见 */
-    public static double ZOOM_DEFAULT = 10.0;
-    public static double ZOOM_MIN = 3.0;
-    public static double ZOOM_MAX = 25.0;
+    /** 默认 zoom：30 格半高 → 约 6-7 个 chunk 可见 */
+    public static double ZOOM_DEFAULT = 30.0;
+    public static double ZOOM_MIN = 10.0;
+    public static double ZOOM_MAX = 60.0;
     /** 每格滚轮的缩放步进 */
     public static double ZOOM_STEP = 3.0;
 
@@ -49,17 +49,18 @@ public class OrthoviewClientEvent {
 
     // ========== 正交投影矩阵 ==========
 
-    /** 室外近裁剪面（格），默认 0.1 */
-    private static final float NEAR_PLANE_OUTDOOR = 0.1f;
-    /** 深洞穴近裁剪面（格），推到 3.0 避免切穿岩壁 */
-    private static final float NEAR_PLANE_CAVE = 3.0f;
-    /** 远裁剪面，固定 1000 格 */
-    private static final float FAR_PLANE = 1000.0f;
+    /** 室外近裁剪面（格），-3000 参考 RoN 方案，把近裁剪面推到相机后方防止任何近处裁剪 */
+    public static float NEAR_PLANE_OUTDOOR = -3000.0f;
+    /** 深洞穴近裁剪面（格），-3000 与室外一致 */
+    public static float NEAR_PLANE_CAVE = -3000.0f;
+    /** 远裁剪面，固定 3000 格（配合 near=-3000，形成 6000 格宽的渲染范围） */
+    public static float FAR_PLANE = 3000.0f;
 
     /**
      * 计算正交投影矩阵。
      * 可见范围以 zoom 为半高（block 数），半宽根据屏幕宽高比自动适配。
-     * 近裁剪面在洞穴中自动推远，避免正交投影切穿头顶岩壁露出黑色空洞。
+     * 近裁剪面固定为 -3000，远裁剪面固定为 +3000，形成 6000 格宽的渲染范围，
+     * 彻底消除任何近处裁剪（建筑侧面、岩壁、地面边缘）。
      */
     public static Matrix4f getOrthoMatrix() {
         Minecraft mc = Minecraft.getInstance();
@@ -72,14 +73,10 @@ public class OrthoviewClientEvent {
         float halfHeight = (float) zoom;
         float halfWidth = halfHeight * aspect;
 
-        // 动态近裁剪面：洞穴越深，近裁剪面推得越远
-        float caveFactor = BirdviewClientEvent.getCaveFactor();
-        float near = NEAR_PLANE_OUTDOOR + caveFactor * (NEAR_PLANE_CAVE - NEAR_PLANE_OUTDOOR);
-
         return new Matrix4f().setOrtho(
                 -halfWidth, halfWidth,
                 -halfHeight, halfHeight,
-                near, FAR_PLANE
+                NEAR_PLANE_OUTDOOR, FAR_PLANE
         );
     }
 
